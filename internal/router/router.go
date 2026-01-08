@@ -19,6 +19,16 @@ var (
 // GetWorkflow returns the workflow name for the given story status.
 // Returns ErrStoryComplete for done stories, ErrUnknownStatus for invalid status values.
 func GetWorkflow(s status.Status) (string, error) {
-	// TODO: implement
-	return "", nil
+	switch s {
+	case status.StatusBacklog:
+		return "create-story", nil
+	case status.StatusReadyForDev, status.StatusInProgress:
+		return "dev-story", nil
+	case status.StatusReview:
+		return "code-review", nil
+	case status.StatusDone:
+		return "", ErrStoryComplete
+	default:
+		return "", ErrUnknownStatus
+	}
 }
