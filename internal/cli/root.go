@@ -70,6 +70,7 @@ story creation, development, code review, and git operations.`,
 		newGitCommitCommand(app),
 		newRunCommand(app),
 		newQueueCommand(app),
+		newEpicCommand(app),
 		newRawCommand(app),
 	)
 
