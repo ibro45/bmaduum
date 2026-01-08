@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -71,21 +72,47 @@ story creation, development, code review, and git operations.`,
 	return rootCmd
 }
 
-// Execute runs the CLI application.
-func Execute() {
-	// Load configuration
-	cfg, err := config.NewLoader().Load()
-	if err != nil {
-		os.Stderr.WriteString("Error loading config: " + err.Error() + "\n")
-		os.Exit(1)
-	}
+// ExecuteResult holds the result of running the CLI.
+type ExecuteResult struct {
+	ExitCode int
+	Err      error
+}
 
-	// Create app and root command
+// RunWithConfig creates the app and executes the root command with the given config.
+// This is the testable core of Execute().
+func RunWithConfig(cfg *config.Config) ExecuteResult {
 	app := NewApp(cfg)
 	rootCmd := NewRootCommand(app)
 
-	// Execute
 	if err := rootCmd.Execute(); err != nil {
-		os.Exit(1)
+		// Check if it's an ExitError from a command
+		if code, ok := IsExitError(err); ok {
+			return ExecuteResult{ExitCode: code, Err: err}
+		}
+		// Other errors (e.g., unknown command) - exit code 1
+		return ExecuteResult{ExitCode: 1, Err: err}
+	}
+	return ExecuteResult{ExitCode: 0, Err: nil}
+}
+
+// Run loads config and runs the CLI, returning the result.
+// This is the fully testable version of Execute().
+func Run() ExecuteResult {
+	cfg, err := config.NewLoader().Load()
+	if err != nil {
+		return ExecuteResult{
+			ExitCode: 1,
+			Err:      fmt.Errorf("error loading config: %w", err),
+		}
+	}
+	return RunWithConfig(cfg)
+}
+
+// Execute runs the CLI application.
+// This is the entry point called by main() and handles os.Exit().
+func Execute() {
+	result := Run()
+	if result.ExitCode != 0 {
+		os.Exit(result.ExitCode)
 	}
 }

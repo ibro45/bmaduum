@@ -2,6 +2,7 @@ package claude
 
 import (
 	"context"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -120,4 +121,109 @@ func TestNewExecutor(t *testing.T) {
 	})
 	assert.Equal(t, "/custom/claude", exec.config.BinaryPath)
 	assert.Equal(t, "json", exec.config.OutputFormat)
+}
+
+func TestNewExecutor_WithCustomParser(t *testing.T) {
+	customParser := NewParser()
+	customParser.BufferSize = 5 * 1024 * 1024 // 5MB
+
+	exec := NewExecutor(ExecutorConfig{
+		Parser: customParser,
+	})
+
+	assert.NotNil(t, exec)
+	assert.Equal(t, customParser, exec.parser)
+}
+
+func TestNewExecutor_WithStderrHandler(t *testing.T) {
+	var capturedLines []string
+	handler := func(line string) {
+		capturedLines = append(capturedLines, line)
+	}
+
+	exec := NewExecutor(ExecutorConfig{
+		StderrHandler: handler,
+	})
+
+	assert.NotNil(t, exec)
+	assert.NotNil(t, exec.config.StderrHandler)
+}
+
+func TestMockExecutor_ExecuteWithResult_WithError(t *testing.T) {
+	mock := &MockExecutor{
+		Error: assert.AnError,
+	}
+
+	ctx := context.Background()
+	exitCode, err := mock.ExecuteWithResult(ctx, "test prompt", nil)
+
+	assert.Error(t, err)
+	assert.Equal(t, 1, exitCode)
+}
+
+func TestMockExecutor_ExecuteWithResult_NilHandler(t *testing.T) {
+	events := []Event{
+		{Type: EventTypeSystem, SessionStarted: true},
+		{Type: EventTypeAssistant, Text: "Hello!"},
+		{Type: EventTypeResult, SessionComplete: true},
+	}
+
+	mock := &MockExecutor{
+		Events:   events,
+		ExitCode: 0,
+	}
+
+	ctx := context.Background()
+	exitCode, err := mock.ExecuteWithResult(ctx, "test prompt", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, 0, exitCode)
+	// Should not panic with nil handler
+}
+
+func TestMockExecutor_MultiplePrompts(t *testing.T) {
+	mock := &MockExecutor{
+		Events: []Event{
+			{Type: EventTypeResult, SessionComplete: true},
+		},
+		ExitCode: 0,
+	}
+
+	ctx := context.Background()
+
+	// Execute multiple prompts
+	_, _ = mock.Execute(ctx, "prompt 1")
+	_, _ = mock.Execute(ctx, "prompt 2")
+	_, _ = mock.ExecuteWithResult(ctx, "prompt 3", nil)
+
+	assert.Equal(t, []string{"prompt 1", "prompt 2", "prompt 3"}, mock.RecordedPrompts)
+}
+
+// mockParser implements Parser for testing
+type mockParser struct {
+	events []Event
+}
+
+func (m *mockParser) Parse(reader io.Reader) <-chan Event {
+	ch := make(chan Event)
+	go func() {
+		defer close(ch)
+		for _, e := range m.events {
+			ch <- e
+		}
+	}()
+	return ch
+}
+
+func TestNewExecutor_UsesProvidedParser(t *testing.T) {
+	customEvents := []Event{
+		{Type: EventTypeSystem, SessionStarted: true},
+	}
+	customParser := &mockParser{events: customEvents}
+
+	exec := NewExecutor(ExecutorConfig{
+		Parser: customParser,
+	})
+
+	assert.Equal(t, customParser, exec.parser)
 }

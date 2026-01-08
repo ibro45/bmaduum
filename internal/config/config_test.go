@@ -171,3 +171,171 @@ func TestExpandTemplate(t *testing.T) {
 		})
 	}
 }
+
+func TestNewLoader(t *testing.T) {
+	loader := NewLoader()
+	assert.NotNil(t, loader)
+	assert.NotNil(t, loader.v)
+}
+
+func TestLoader_LoadFromFile_NonExistent(t *testing.T) {
+	loader := NewLoader()
+	_, err := loader.LoadFromFile("/nonexistent/path/config.yaml")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "error reading config file")
+}
+
+func TestLoader_LoadFromFile_InvalidYAML(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "invalid.yaml")
+
+	// Write invalid YAML
+	invalidContent := `
+workflows:
+  - this is not valid yaml for this structure
+    missing: colon here
+`
+	err := os.WriteFile(configPath, []byte(invalidContent), 0644)
+	require.NoError(t, err)
+
+	loader := NewLoader()
+	_, err = loader.LoadFromFile(configPath)
+
+	// Should error on unmarshal due to wrong structure
+	assert.Error(t, err)
+}
+
+func TestLoader_Load_DefaultsWithNoConfigFile(t *testing.T) {
+	// Ensure no config file exists in current dir
+	// Load() should fall back to defaults
+	tmpDir := t.TempDir()
+	originalWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(originalWd)
+
+	// Clear any env vars that might interfere
+	os.Unsetenv("BMAD_CONFIG_PATH")
+	os.Unsetenv("BMAD_CLAUDE_PATH")
+
+	loader := NewLoader()
+	cfg, err := loader.Load()
+
+	require.NoError(t, err)
+	assert.NotNil(t, cfg)
+	// Should have default values
+	assert.Equal(t, "claude", cfg.Claude.BinaryPath)
+	assert.Equal(t, "stream-json", cfg.Claude.OutputFormat)
+}
+
+func TestLoader_Load_WithConfigPathEnv(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "custom-config.yaml")
+
+	configContent := `
+claude:
+  binary_path: /from/env/path/claude
+`
+	err := os.WriteFile(configPath, []byte(configContent), 0644)
+	require.NoError(t, err)
+
+	os.Setenv("BMAD_CONFIG_PATH", configPath)
+	defer os.Unsetenv("BMAD_CONFIG_PATH")
+
+	loader := NewLoader()
+	cfg, err := loader.Load()
+
+	require.NoError(t, err)
+	assert.Equal(t, "/from/env/path/claude", cfg.Claude.BinaryPath)
+}
+
+func TestLoader_Load_EnvOverridesTakePrecedence(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	// Config file sets one path
+	configContent := `
+claude:
+  binary_path: /from/file/claude
+`
+	err := os.WriteFile(configPath, []byte(configContent), 0644)
+	require.NoError(t, err)
+
+	os.Setenv("BMAD_CONFIG_PATH", configPath)
+	os.Setenv("BMAD_CLAUDE_PATH", "/from/env/override/claude")
+	defer os.Unsetenv("BMAD_CONFIG_PATH")
+	defer os.Unsetenv("BMAD_CLAUDE_PATH")
+
+	loader := NewLoader()
+	cfg, err := loader.Load()
+
+	require.NoError(t, err)
+	// Env var should take precedence
+	assert.Equal(t, "/from/env/override/claude", cfg.Claude.BinaryPath)
+}
+
+func TestMustLoad_Success(t *testing.T) {
+	// MustLoad should not panic when loading defaults
+	tmpDir := t.TempDir()
+	originalWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(originalWd)
+
+	os.Unsetenv("BMAD_CONFIG_PATH")
+	os.Unsetenv("BMAD_CLAUDE_PATH")
+
+	// Should not panic
+	cfg := MustLoad()
+	assert.NotNil(t, cfg)
+}
+
+func TestConfig_GetPrompt_AllWorkflows(t *testing.T) {
+	cfg := DefaultConfig()
+
+	workflows := []string{"create-story", "dev-story", "code-review", "git-commit"}
+
+	for _, wf := range workflows {
+		t.Run(wf, func(t *testing.T) {
+			prompt, err := cfg.GetPrompt(wf, "test-key")
+			assert.NoError(t, err)
+			assert.NotEmpty(t, prompt)
+			assert.Contains(t, prompt, "test-key")
+		})
+	}
+}
+
+func TestLoader_LoadFromFile_DifferentExtension(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.json")
+
+	// Write valid JSON config
+	jsonContent := `{
+		"claude": {
+			"binary_path": "/json/path/claude"
+		}
+	}`
+	err := os.WriteFile(configPath, []byte(jsonContent), 0644)
+	require.NoError(t, err)
+
+	loader := NewLoader()
+	cfg, err := loader.LoadFromFile(configPath)
+
+	require.NoError(t, err)
+	assert.Equal(t, "/json/path/claude", cfg.Claude.BinaryPath)
+}
+
+func TestDefaultConfig_WorkflowTemplates(t *testing.T) {
+	cfg := DefaultConfig()
+
+	// Verify each workflow has a non-empty template
+	for name, workflow := range cfg.Workflows {
+		t.Run(name, func(t *testing.T) {
+			assert.NotEmpty(t, workflow.PromptTemplate, "workflow %s should have a template", name)
+		})
+	}
+}
+
+func TestPromptData_StoryKey(t *testing.T) {
+	data := PromptData{StoryKey: "ABC-123"}
+	assert.Equal(t, "ABC-123", data.StoryKey)
+}

@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"os"
-
 	"github.com/spf13/cobra"
 )
 
@@ -16,13 +14,14 @@ The queue stops on the first failure.
 Example:
   bmad-automate queue 6-5 6-6 6-7 6-8`,
 		Args: cobra.MinimumNArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			exitCode := app.Queue.RunQueue(ctx, args)
 			if exitCode != 0 {
 				cmd.SilenceUsage = true
-				os.Exit(exitCode)
+				return NewExitError(exitCode)
 			}
+			return nil
 		},
 	}
 }
