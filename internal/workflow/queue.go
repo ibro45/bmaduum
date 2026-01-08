@@ -2,10 +2,13 @@ package workflow
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"bmad-automate/internal/output"
+	"bmad-automate/internal/router"
+	"bmad-automate/internal/status"
 )
 
 // QueueRunner processes multiple stories in sequence.
@@ -18,9 +21,9 @@ func NewQueueRunner(runner *Runner) *QueueRunner {
 	return &QueueRunner{runner: runner}
 }
 
-// RunQueue executes the full cycle for each story in the queue.
-// It stops on the first failure.
-func (q *QueueRunner) RunQueue(ctx context.Context, storyKeys []string) int {
+// RunQueueWithStatus executes the appropriate workflow for each story based on status.
+// Done stories are skipped. It stops on the first failure.
+func (q *QueueRunner) RunQueueWithStatus(ctx context.Context, storyKeys []string, statusReader *status.Reader) int {
 	queueStart := time.Now()
 	results := make([]output.StoryResult, 0, len(storyKeys))
 
@@ -30,7 +33,56 @@ func (q *QueueRunner) RunQueue(ctx context.Context, storyKeys []string) int {
 		q.runner.printer.QueueStoryStart(i+1, len(storyKeys), storyKey)
 
 		storyStart := time.Now()
-		exitCode := q.runFullCycleInternal(ctx, storyKey)
+
+		// Get story status
+		storyStatus, err := statusReader.GetStoryStatus(storyKey)
+		if err != nil {
+			fmt.Printf("  Error: %v\n", err)
+			result := output.StoryResult{
+				Key:      storyKey,
+				Success:  false,
+				Duration: time.Since(storyStart),
+				FailedAt: "status",
+			}
+			results = append(results, result)
+			q.runner.printer.QueueSummary(results, storyKeys, time.Since(queueStart))
+			return 1
+		}
+
+		// Route to appropriate workflow
+		workflowName, err := router.GetWorkflow(storyStatus)
+		if err != nil {
+			if errors.Is(err, router.ErrStoryComplete) {
+				// Done stories are skipped, not failures
+				fmt.Printf("  ↷ Skipped (already done)\n")
+				result := output.StoryResult{
+					Key:      storyKey,
+					Success:  true,
+					Duration: time.Since(storyStart),
+					Skipped:  true,
+				}
+				results = append(results, result)
+				fmt.Println() // Add spacing between stories
+				continue
+			}
+			if errors.Is(err, router.ErrUnknownStatus) {
+				fmt.Printf("  Error: unknown status value: %s\n", storyStatus)
+			} else {
+				fmt.Printf("  Error: %v\n", err)
+			}
+			result := output.StoryResult{
+				Key:      storyKey,
+				Success:  false,
+				Duration: time.Since(storyStart),
+				FailedAt: "routing",
+			}
+			results = append(results, result)
+			q.runner.printer.QueueSummary(results, storyKeys, time.Since(queueStart))
+			return 1
+		}
+
+		// Run the workflow
+		exitCode := q.runner.RunSingle(ctx, workflowName, storyKey)
 		duration := time.Since(storyStart)
 
 		result := output.StoryResult{
@@ -40,10 +92,8 @@ func (q *QueueRunner) RunQueue(ctx context.Context, storyKeys []string) int {
 		}
 
 		if exitCode != 0 {
-			result.FailedAt = "cycle"
+			result.FailedAt = workflowName
 			results = append(results, result)
-
-			// Print partial summary and exit
 			q.runner.printer.QueueSummary(results, storyKeys, time.Since(queueStart))
 			return exitCode
 		}
@@ -53,44 +103,5 @@ func (q *QueueRunner) RunQueue(ctx context.Context, storyKeys []string) int {
 	}
 
 	q.runner.printer.QueueSummary(results, storyKeys, time.Since(queueStart))
-	return 0
-}
-
-// runFullCycleInternal runs a full cycle without the outer summary box.
-// Used by queue to avoid duplicate boxing.
-func (q *QueueRunner) runFullCycleInternal(ctx context.Context, storyKey string) int {
-	totalStart := time.Now()
-
-	// Build steps from config
-	stepNames := q.runner.config.GetFullCycleSteps()
-	steps := make([]Step, 0, len(stepNames))
-
-	for _, name := range stepNames {
-		prompt, err := q.runner.config.GetPrompt(name, storyKey)
-		if err != nil {
-			fmt.Printf("  Error building step %s: %v\n", name, err)
-			return 1
-		}
-		steps = append(steps, Step{Name: name, Prompt: prompt})
-	}
-
-	for i, step := range steps {
-		fmt.Printf("  [%d/%d] %s\n", i+1, len(steps), step.Name)
-
-		stepStart := time.Now()
-		exitCode := q.runner.runClaude(ctx, step.Prompt, fmt.Sprintf("%s: %s", step.Name, storyKey))
-		duration := time.Since(stepStart)
-
-		if exitCode != 0 {
-			fmt.Printf("  ✗ Failed at %s\n", step.Name)
-			return exitCode
-		}
-
-		_ = duration // Duration tracking for potential future use
-	}
-
-	totalDuration := time.Since(totalStart)
-	fmt.Printf("  ✓ Story complete in %s\n", totalDuration.Round(time.Second))
-
 	return 0
 }

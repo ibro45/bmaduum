@@ -21,6 +21,7 @@ type StoryResult struct {
 	Success  bool
 	Duration time.Duration
 	FailedAt string
+	Skipped  bool
 }
 
 // Printer defines the interface for terminal output operations.
@@ -195,8 +196,11 @@ func (p *DefaultPrinter) QueueStoryStart(index, total int, storyKey string) {
 func (p *DefaultPrinter) QueueSummary(results []StoryResult, allKeys []string, totalDuration time.Duration) {
 	completed := 0
 	failed := 0
+	skipped := 0
 	for _, r := range results {
-		if r.Success {
+		if r.Skipped {
+			skipped++
+		} else if r.Success {
 			completed++
 		} else {
 			failed++
@@ -213,20 +217,32 @@ func (p *DefaultPrinter) QueueSummary(results []StoryResult, allKeys []string, t
 	}
 
 	sb.WriteString(strings.Repeat("─", 50) + "\n")
-	sb.WriteString(fmt.Sprintf("Completed: %d | Failed: %d | Remaining: %d\n", completed, failed, remaining))
+	sb.WriteString(fmt.Sprintf("Completed: %d | Skipped: %d | Failed: %d | Remaining: %d\n", completed, skipped, failed, remaining))
 	sb.WriteString(strings.Repeat("─", 50) + "\n")
 
 	for _, r := range results {
-		status := successStyle.Render(iconSuccess)
-		if !r.Success {
+		var status string
+		var suffix string
+		if r.Skipped {
+			status = mutedStyle.Render("↷")
+			suffix = "(done)"
+		} else if r.Success {
+			status = successStyle.Render(iconSuccess)
+			suffix = ""
+		} else {
 			status = errorStyle.Render(iconError)
+			suffix = ""
 		}
-		sb.WriteString(fmt.Sprintf("%s %-30s %s\n", status, r.Key, r.Duration.Round(time.Second)))
+		if suffix != "" {
+			sb.WriteString(fmt.Sprintf("%s %-30s %s\n", status, r.Key, suffix))
+		} else {
+			sb.WriteString(fmt.Sprintf("%s %-30s %s\n", status, r.Key, r.Duration.Round(time.Second)))
+		}
 	}
 
 	if remaining > 0 {
 		for i := len(results); i < len(allKeys); i++ {
-			sb.WriteString(fmt.Sprintf("%s %-30s (skipped)\n", mutedStyle.Render(iconPending), allKeys[i]))
+			sb.WriteString(fmt.Sprintf("%s %-30s (pending)\n", mutedStyle.Render(iconPending), allKeys[i]))
 		}
 	}
 

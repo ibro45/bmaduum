@@ -10,16 +10,18 @@ import (
 	"bmad-automate/internal/claude"
 	"bmad-automate/internal/config"
 	"bmad-automate/internal/output"
+	"bmad-automate/internal/status"
 	"bmad-automate/internal/workflow"
 )
 
 // App holds the application dependencies.
 type App struct {
-	Config   *config.Config
-	Executor claude.Executor
-	Printer  output.Printer
-	Runner   *workflow.Runner
-	Queue    *workflow.QueueRunner
+	Config       *config.Config
+	Executor     claude.Executor
+	Printer      output.Printer
+	Runner       *workflow.Runner
+	Queue        *workflow.QueueRunner
+	StatusReader *status.Reader
 }
 
 // NewApp creates a new application with all dependencies wired up.
@@ -37,13 +39,15 @@ func NewApp(cfg *config.Config) *App {
 
 	runner := workflow.NewRunner(executor, printer, cfg)
 	queue := workflow.NewQueueRunner(runner)
+	statusReader := status.NewReader("")
 
 	return &App{
-		Config:   cfg,
-		Executor: executor,
-		Printer:  printer,
-		Runner:   runner,
-		Queue:    queue,
+		Config:       cfg,
+		Executor:     executor,
+		Printer:      printer,
+		Runner:       runner,
+		Queue:        queue,
+		StatusReader: statusReader,
 	}
 }
 
@@ -66,6 +70,7 @@ story creation, development, code review, and git operations.`,
 		newGitCommitCommand(app),
 		newRunCommand(app),
 		newQueueCommand(app),
+		newEpicCommand(app),
 		newRawCommand(app),
 	)
 
