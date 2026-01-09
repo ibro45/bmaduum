@@ -62,16 +62,16 @@ Plans:
 - Ends with git-commit+push→mark done
 - Updates sprint-status.yaml after each step
 
-#### Phase 8: Update Run Command
+#### Phase 8: Update Run Command ✅
 
 **Goal**: `run <story>` executes full lifecycle, not just one workflow
 **Depends on**: Phase 7
 **Research**: Unlikely (internal patterns)
-**Plans**: TBD
+**Plans**: 1/1 complete
 
 Plans:
 
-- [ ] 08-01: TBD (run /gsd:plan-phase 8 to break down)
+- [x] 08-01: Run command with lifecycle execution (TDD) — completed 2026-01-09
 
 **Details:**
 
@@ -173,7 +173,7 @@ Plans:
 | 5. Epic Command             | v1.0      | 1/1            | Complete    | 2026-01-08 |
 | 6. Lifecycle Definition     | v1.1      | 1/1            | Complete    | 2026-01-08 |
 | 7. Story Lifecycle Executor | v1.1      | 2/2            | Complete    | 2026-01-09 |
-| 8. Update Run Command       | v1.1      | 0/?            | Not started | -          |
+| 8. Update Run Command       | v1.1      | 1/1            | Complete    | 2026-01-09 |
 | 9. Update Epic Command      | v1.1      | 0/?            | Not started | -          |
 | 10. Update Queue Command    | v1.1      | 0/?            | Not started | -          |
 | 11. Error Recovery & Resume | v1.1      | 0/?            | Not started | -          |
