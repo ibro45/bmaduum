@@ -11,14 +11,14 @@ Comprehensive architecture documentation for `bmad-automate`.
 │                              bmad-automate                                  │
 │                                                                             │
 │  ┌─────────────┐    ┌──────────────┐    ┌─────────────┐    ┌────────────┐  │
-│  │  CLI Layer  │───▶│   Workflow   │───▶│   Claude    │───▶│   Output   │  │
-│  │   (Cobra)   │    │   (Runner)   │    │  (Executor) │    │  (Printer) │  │
+│  │  CLI Layer  │───▶│  Lifecycle   │───▶│   Workflow  │───▶│   Claude   │  │
+│  │   (Cobra)   │    │  (Executor)  │    │   (Runner)  │    │ (Executor) │  │
 │  └─────────────┘    └──────────────┘    └─────────────┘    └────────────┘  │
 │         │                  │                   │                  │        │
 │         ▼                  ▼                   ▼                  ▼        │
 │  ┌─────────────┐    ┌──────────────┐    ┌─────────────┐    ┌────────────┐  │
-│  │   Config    │    │    Status    │    │   Parser    │    │   Styles   │  │
-│  │   (Viper)   │    │   (Reader)   │    │   (JSON)    │    │ (Lipgloss) │  │
+│  │   Config    │    │    State     │    │   Status    │    │   Output   │  │
+│  │   (Viper)   │    │  (Manager)   │    │   (Reader)  │    │  (Printer) │  │
 │  └─────────────┘    └──────────────┘    └─────────────┘    └────────────┘  │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -38,7 +38,7 @@ Comprehensive architecture documentation for `bmad-automate`.
 
 - Single executable with subcommands
 - Subprocess orchestration (wraps Claude CLI)
-- Stateless execution model
+- Lifecycle-driven execution with state persistence for resume
 - Event-driven streaming output
 - Interface-based design for testability
 
@@ -58,16 +58,33 @@ Comprehensive architecture documentation for `bmad-automate`.
 │                                                                 │
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │ App struct (Dependency Injection Container)               │  │
-│  │   - Config    *config.Config                              │  │
-│  │   - Executor  claude.Executor                             │  │
-│  │   - Printer   output.Printer                              │  │
-│  │   - Runner    *workflow.Runner                            │  │
-│  │   - Queue     *workflow.QueueRunner                       │  │
-│  │   - StatusReader *status.Reader                           │  │
+│  │   - Config         *config.Config                         │  │
+│  │   - Executor       claude.Executor                        │  │
+│  │   - Printer        output.Printer                         │  │
+│  │   - Runner         *workflow.Runner                       │  │
+│  │   - Queue          *workflow.QueueRunner                  │  │
+│  │   - StatusReader   *status.Reader                         │  │
+│  │   - Lifecycle      *lifecycle.Executor                    │  │
+│  │   - StateManager   *state.Manager                         │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                                                                 │
 │  Commands: create-story, dev-story, code-review, git-commit,    │
 │            run, queue, epic, raw                                │
+└─────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Lifecycle Layer                              │
+│                   internal/lifecycle/                           │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  Executor                                               │    │
+│  │    - Execute(ctx, storyKey) error                       │    │
+│  │    - GetSteps(storyKey) ([]LifecycleStep, error)        │    │
+│  │    - SetProgressCallback(ProgressCallback)              │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                 │
+│  Dependencies: WorkflowRunner, StatusReader, StatusWriter       │
 └─────────────────────────────────────────────────────────────────┘
                                   │
                                   ▼
@@ -83,8 +100,8 @@ Comprehensive architecture documentation for `bmad-automate`.
 │  └─────────────────────┘                                        │
 └─────────────────────────────────────────────────────────────────┘
                                   │
-              ┌───────────────────┼───────────────────┐
-              ▼                   ▼                   ▼
+       ┌──────────────────────────┼──────────────────────────┐
+       ▼                          ▼                          ▼
 ┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
 │  Claude Layer     │  │  Output Layer     │  │  Config Layer     │
 │  internal/claude/ │  │  internal/output/ │  │  internal/config/ │
@@ -102,6 +119,19 @@ Comprehensive architecture documentation for `bmad-automate`.
 │          -p "<prompt>"                                        │
 │          --output-format stream-json                          │
 └───────────────────────────────────────────────────────────────┘
+
+                    Support Layers
+       ┌──────────────────────────┬──────────────────────────┐
+       ▼                          ▼                          ▼
+┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
+│  State Layer      │  │  Status Layer     │  │  Router Layer     │
+│  internal/state/  │  │  internal/status/ │  │  internal/router/ │
+│                   │  │                   │  │                   │
+│  - Manager        │  │  - Reader         │  │  - GetWorkflow()  │
+│  - Save()         │  │  - GetStoryStatus │  │  - GetLifecycle() │
+│  - Load()         │  │                   │  │  - LifecycleStep  │
+│  - Clear()        │  │                   │  │                   │
+└───────────────────┘  └───────────────────┘  └───────────────────┘
 ```
 
 ## Package Dependencies
@@ -112,7 +142,15 @@ cmd/bmad-automate/main.go
          ▼
     internal/cli (Cobra commands)
          │
-         ├──► internal/workflow (orchestration)
+         ├──► internal/lifecycle (lifecycle orchestration)
+         │         │
+         │         ├──► internal/router (GetLifecycle for step sequences)
+         │         │
+         │         └──► internal/workflow (WorkflowRunner for execution)
+         │
+         ├──► internal/state (execution state persistence)
+         │
+         ├──► internal/workflow (single workflow orchestration)
          │         │
          │         ├──► internal/claude (Claude execution + JSON parsing)
          │         │
@@ -242,6 +280,109 @@ cmd/bmad-automate/main.go
 │    └────────────────────────────────────────────────────────────────────┘  │
 │                                                                            │
 │  Print summary with all results                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Lifecycle Execution Flow
+
+The lifecycle executor runs stories through their complete workflow sequence from current status to "done".
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│  User: bmad-automate run PROJ-123                                          │
+│  (Full lifecycle execution)                                                │
+└────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│  1. Get Current Status                                                     │
+│     - statusReader.GetStoryStatus("PROJ-123") → "backlog"                  │
+└────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│  2. Get Lifecycle Steps                                                    │
+│     - router.GetLifecycle("backlog") → 4 steps                             │
+│                                                                            │
+│     Steps:                                                                 │
+│       1. create-story  → ready-for-dev                                     │
+│       2. dev-story     → review                                            │
+│       3. code-review   → done                                              │
+│       4. git-commit    → done                                              │
+└────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│  3. Execute Steps Loop                                                     │
+│                                                                            │
+│     for each step:                                                         │
+│       ┌────────────────────────────────────────────────────────────────┐   │
+│       │  a. Call progressCallback(stepIndex, totalSteps, workflow)     │   │
+│       │  b. runner.RunSingle(ctx, workflow, storyKey)                  │   │
+│       │  c. If exit code != 0 → return error (fail-fast)               │   │
+│       │  d. statusWriter.UpdateStatus(storyKey, nextStatus)            │   │
+│       └────────────────────────────────────────────────────────────────┘   │
+│                                                                            │
+│     Success: all steps completed                                           │
+│     Failure: stops at first error                                          │
+└────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                    ┌───────────────┴───────────────┐
+                    ▼                               ▼
+           ┌─────────────────┐             ┌─────────────────┐
+           │     Success     │             │     Failure     │
+           │                 │             │                 │
+           │  Story is done  │             │  Save state     │
+           │  Clear state    │             │  Report error   │
+           └─────────────────┘             │  Exit with code │
+                                           └─────────────────┘
+```
+
+### State Persistence
+
+The state package enables resume functionality when lifecycle execution fails.
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                         State File: .bmad-state.json                       │
+│                                                                            │
+│  Location: Working directory (hidden file)                                 │
+│  Format: JSON                                                              │
+│                                                                            │
+│  {                                                                         │
+│    "story_key": "PROJ-123",                                                │
+│    "step_index": 2,           // 0-based, step that failed                 │
+│    "total_steps": 4,          // total steps in lifecycle                  │
+│    "start_status": "backlog"  // status when execution began               │
+│  }                                                                         │
+└────────────────────────────────────────────────────────────────────────────┘
+
+                         Save/Load Flow
+
+┌─────────────────┐                           ┌─────────────────┐
+│  On Failure     │                           │  On Resume      │
+│                 │                           │                 │
+│  1. Save state  │                           │  1. Load state  │
+│     to .json    │                           │     from .json  │
+│                 │                           │                 │
+│  2. Exit with   │                           │  2. Continue    │
+│     error code  │                           │     from step   │
+└─────────────────┘                           │                 │
+                                              │  3. On success, │
+                                              │     clear state │
+                                              └─────────────────┘
+
+                     Atomic Write Pattern
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│  Manager.Save(state)                                                       │
+│                                                                            │
+│  1. Write to temporary file: .bmad-state.json.tmp                          │
+│  2. Rename temp to final: .bmad-state.json                                 │
+│                                                                            │
+│  This temp + rename pattern ensures crash safety:                          │
+│  - File is either fully written or not present                             │
+│  - Never left in a corrupted partial state                                 │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -430,6 +571,75 @@ type Parser interface {
 }
 ```
 
+### Lifecycle Interfaces
+
+```go
+// WorkflowRunner is the interface for executing individual workflows.
+// Implemented by workflow.Runner.
+type WorkflowRunner interface {
+    RunSingle(ctx context.Context, workflowName, storyKey string) int
+}
+
+// StatusReader is the interface for looking up story status.
+// Implemented by status.Reader.
+type StatusReader interface {
+    GetStoryStatus(storyKey string) (status.Status, error)
+}
+
+// StatusWriter is the interface for persisting story status updates.
+// Implemented by status.Reader (which handles both read and write).
+type StatusWriter interface {
+    UpdateStatus(storyKey string, newStatus status.Status) error
+}
+
+// ProgressCallback is invoked before each workflow step begins.
+type ProgressCallback func(stepIndex, totalSteps int, workflow string)
+```
+
+### Lifecycle Executor
+
+```go
+// Executor orchestrates the complete story lifecycle.
+type Executor struct {
+    runner           WorkflowRunner
+    statusReader     StatusReader
+    statusWriter     StatusWriter
+    progressCallback ProgressCallback
+}
+
+// Execute runs the complete story lifecycle from current status to done.
+// Fail-fast: stops on first error.
+func (e *Executor) Execute(ctx context.Context, storyKey string) error
+
+// GetSteps returns the remaining lifecycle steps without executing.
+// Useful for dry-run preview.
+func (e *Executor) GetSteps(storyKey string) ([]LifecycleStep, error)
+
+// SetProgressCallback configures progress reporting.
+func (e *Executor) SetProgressCallback(cb ProgressCallback)
+```
+
+### State Manager
+
+```go
+// Manager handles state persistence operations.
+type Manager struct {
+    dir string  // Working directory for state file
+}
+
+// Save persists state atomically (temp file + rename).
+func (m *Manager) Save(state State) error
+
+// Load reads state from disk. Returns ErrNoState if not found.
+func (m *Manager) Load() (State, error)
+
+// Clear removes the state file. Idempotent.
+func (m *Manager) Clear() error
+
+// Exists returns true if a state file exists.
+func (m *Manager) Exists() bool
+```
+
 ## Testing Architecture
 
 ```
@@ -522,7 +732,8 @@ type Parser interface {
 1. **Dependency Injection** - All dependencies injected via App struct
 2. **Interface Segregation** - Small, focused interfaces (Executor, Printer, Parser)
 3. **Single Responsibility** - Each package has one clear purpose
-4. **Stateless Design** - No state between command invocations
+4. **State Persistence** - Resume capability via atomic state file writes
 5. **Event-Driven Processing** - Stream-based handling of Claude output
 6. **Testability First** - Interfaces and mocks for isolated testing
 7. **Graceful Degradation** - Queue continues processing, skips completed stories
+8. **Fail-Fast Execution** - Stop immediately on error, save state for resume
