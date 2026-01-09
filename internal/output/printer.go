@@ -8,66 +8,108 @@ import (
 	"time"
 )
 
-// StepResult represents the result of a single step execution.
+// StepResult represents the result of a single workflow step execution.
+//
+// It captures the step name, execution duration, and success/failure status
+// for display in cycle summaries.
 type StepResult struct {
-	Name     string
+	// Name is the step identifier (e.g., "create-story", "dev-story").
+	Name string
+	// Duration is how long the step took to execute.
 	Duration time.Duration
-	Success  bool
+	// Success indicates whether the step completed successfully.
+	Success bool
 }
 
-// StoryResult represents the result of processing a story in a queue.
+// StoryResult represents the result of processing a story in queue or epic operations.
+//
+// It tracks the outcome of each story in a batch operation, including whether
+// it was skipped (already done), completed successfully, or failed.
 type StoryResult struct {
-	Key      string
-	Success  bool
+	// Key is the story identifier (e.g., "7-1-define-schema").
+	Key string
+	// Success indicates whether the story completed all lifecycle steps.
+	Success bool
+	// Duration is how long the story processing took.
 	Duration time.Duration
+	// FailedAt contains the step name where processing failed, if any.
 	FailedAt string
-	Skipped  bool
+	// Skipped indicates the story was skipped because it was already done.
+	Skipped bool
 }
 
-// Printer defines the interface for terminal output operations.
+// Printer defines the interface for structured terminal output operations.
+//
+// The interface enables output capture in tests via [NewPrinterWithWriter],
+// which accepts a custom io.Writer instead of writing to stdout.
+//
+// Methods are grouped by operation type: session lifecycle, step progress,
+// tool usage display, content output, cycle summaries, and queue summaries.
 type Printer interface {
-	// Session lifecycle
+	// SessionStart prints an indicator that a new execution session has begun.
 	SessionStart()
+	// SessionEnd prints completion status for the session with total duration.
 	SessionEnd(duration time.Duration, success bool)
 
-	// Step progress
+	// StepStart prints a numbered step header (e.g., "[1/4] create-story").
 	StepStart(step, total int, name string)
+	// StepEnd prints step completion status with duration.
 	StepEnd(duration time.Duration, success bool)
 
-	// Tool usage
+	// ToolUse displays Claude tool invocation details including name,
+	// description, command, and file path as applicable.
 	ToolUse(name, description, command, filePath string)
+	// ToolResult displays tool execution output, optionally truncating
+	// stdout to the specified number of lines.
 	ToolResult(stdout, stderr string, truncateLines int)
 
-	// Content
+	// Text displays plain text content from Claude.
 	Text(message string)
+	// Divider prints a visual separator line between sections.
 	Divider()
 
-	// Full cycle output
+	// CycleHeader prints the header for a full lifecycle cycle operation.
 	CycleHeader(storyKey string)
+	// CycleSummary prints the completion summary showing all steps and durations.
 	CycleSummary(storyKey string, steps []StepResult, totalDuration time.Duration)
+	// CycleFailed prints failure information when a cycle fails at a step.
 	CycleFailed(storyKey string, failedStep string, duration time.Duration)
 
-	// Queue output
+	// QueueHeader prints the header for a batch queue operation.
 	QueueHeader(count int, stories []string)
+	// QueueStoryStart prints the header when starting a story in a queue.
 	QueueStoryStart(index, total int, storyKey string)
+	// QueueSummary prints the batch results summary showing completed,
+	// skipped, failed, and remaining stories.
 	QueueSummary(results []StoryResult, allKeys []string, totalDuration time.Duration)
 
-	// Command info
+	// CommandHeader prints the header before running a workflow command.
 	CommandHeader(label, prompt string, truncateLength int)
+	// CommandFooter prints the footer after a command completes with
+	// duration, success status, and exit code.
 	CommandFooter(duration time.Duration, success bool, exitCode int)
 }
 
-// DefaultPrinter implements Printer with lipgloss styling.
+// DefaultPrinter implements [Printer] with lipgloss terminal styling.
+//
+// It is the production implementation used for CLI output. The styles
+// are defined in styles.go and provide consistent color and formatting
+// across all output operations.
 type DefaultPrinter struct {
 	out io.Writer
 }
 
-// NewPrinter creates a new DefaultPrinter that writes to stdout.
+// NewPrinter creates a new [DefaultPrinter] that writes to stdout.
+//
+// This is the standard constructor for production CLI output.
 func NewPrinter() *DefaultPrinter {
 	return &DefaultPrinter{out: os.Stdout}
 }
 
-// NewPrinterWithWriter creates a new DefaultPrinter with a custom writer.
+// NewPrinterWithWriter creates a new [DefaultPrinter] with a custom writer.
+//
+// This constructor enables output capture in tests by providing a bytes.Buffer
+// or other io.Writer implementation instead of stdout.
 func NewPrinterWithWriter(w io.Writer) *DefaultPrinter {
 	return &DefaultPrinter{out: w}
 }
