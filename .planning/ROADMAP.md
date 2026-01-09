@@ -77,11 +77,13 @@ Plans:
 **Goal**: Add doc comments to `internal/cli`, `internal/router`, `internal/status`, `internal/state`, `internal/output`, `internal/config`
 **Depends on**: Phase 14
 **Research**: Unlikely (standard Go documentation patterns)
-**Plans**: TBD
+**Plans**: 3
 
 Plans:
 
-- [ ] 15-01: TBD
+- [ ] 15-01: internal/cli package documentation
+- [ ] 15-02: internal/status and internal/output package documentation
+- [ ] 15-03: internal/router, internal/state, and internal/config package documentation
 
 #### Phase 16: Package Documentation
 
@@ -132,7 +134,7 @@ Plans:
 | Phase                         | Milestone | Plans Complete | Status      | Completed  |
 | ----------------------------- | --------- | -------------- | ----------- | ---------- |
 | 14. GoDoc Core Packages       | v1.2      | 3/3            | Complete    | 2026-01-09 |
-| 15. GoDoc Supporting Packages | v1.2      | 0/?            | Not started | -          |
+| 15. GoDoc Supporting Packages | v1.2      | 0/3            | Not started | -          |
 | 16. Package Documentation     | v1.2      | 0/?            | Not started | -          |
 | 17. Update Docs Folder        | v1.2      | 0/?            | Not started | -          |
 | 18. Contribution Guide        | v1.2      | 0/?            | Not started | -          |
