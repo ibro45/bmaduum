@@ -1,25 +1,27 @@
-# BMAD Automate - Status-Based Workflow Routing
+# BMAD Automate - Full Story Lifecycle Automation
 
 ## What This Is
 
-A CLI tool that orchestrates Claude CLI to run automated development workflows. Now enhanced with automatic story status detection from sprint-status.yaml for workflow routing, plus an `epic` command for batch execution.
+A CLI tool that orchestrates Claude CLI to run complete automated development workflows. Stories run through their full lifecycle (create→dev→review→commit) automatically, with error recovery, dry-run mode, and step progress visibility.
 
 ## Core Value
 
-Eliminate manual workflow selection by automatically routing stories to the correct workflow based on their status in sprint-status.yaml.
+Fully automated story lifecycle execution — run a story once and watch it complete from current status to done, with auto-status updates and error recovery.
 
-## Current State (v1.0)
+## Current State (v1.1)
 
-**Shipped:** 2026-01-08
+**Shipped:** 2026-01-09
 
-Status-based workflow routing is complete:
+Full story lifecycle execution is complete:
 
-- `run <story>` — Automatically routes to correct workflow based on status
-- `queue <story>...` — Routes each story, skips done, fails fast
-- `epic <epic-id>` — Runs all stories for an epic in numeric order
+- `run <story>` — Executes complete lifecycle from current status to done
+- `queue <story>...` — Full lifecycle for each story, skips done, fails fast
+- `epic <epic-id>` — Full lifecycle for all stories in an epic
+- `--dry-run` — Preview workflow sequence without execution
+- Error recovery — State saved on failure, resumable
 
 Tech stack: Go, Cobra, Viper, yaml.v3
-Codebase: 4,951 LOC Go
+Codebase: 6,418 LOC Go
 
 ## Requirements
 
@@ -38,15 +40,20 @@ Codebase: 4,951 LOC Go
 - ✓ Queue command with status routing and done-skip — v1.0
 - ✓ Epic command for batch execution with numeric sorting — v1.0
 - ✓ Fail-fast on story failure — v1.0
+- ✓ Full story lifecycle execution (create→dev→review→commit) — v1.1
+- ✓ Auto-status updates after each workflow step — v1.1
+- ✓ Lifecycle orchestration with interface-based DI — v1.1
+- ✓ State persistence for error recovery — v1.1
+- ✓ Dry-run mode for workflow preview — v1.1
+- ✓ Step progress visibility with callbacks — v1.1
 
 ### Active
 
-(None currently — v1.0 milestone complete)
+(None currently — v1.1 milestone complete)
 
 ### Out of Scope
 
 - Manual workflow override flag — status always determines workflow
-- Updating sprint-status.yaml after story completion — read-only access
 - Parallel story execution — sequential only
 - Epic status auto-transitions — only story-level routing
 
@@ -75,18 +82,22 @@ Codebase: 4,951 LOC Go
 
 ## Key Decisions
 
-| Decision                             | Rationale                                             | Outcome |
-| ------------------------------------ | ----------------------------------------------------- | ------- |
-| Auto-detect only, no manual override | Simplicity — status is source of truth                | ✓ Good  |
-| Stop on first failure in epic        | Allows investigation before continuing                | ✓ Good  |
-| Sequential execution only            | Stories may have dependencies                         | ✓ Good  |
-| Read-only sprint-status.yaml access  | Separation of concerns — status managed elsewhere     | ✓ Good  |
-| yaml.v3 instead of Viper for status  | Simpler for single file with known structure          | ✓ Good  |
-| Package-level router function        | Pure mapping with no state needed                     | ✓ Good  |
-| StatusReader injected via App struct | Testability — allows mock injection                   | ✓ Good  |
-| Done stories skipped in queue        | Allows mixed-status batches without failure           | ✓ Good  |
-| Epic reuses QueueRunner              | DRY — inherits all routing, skip, and fail-fast logic | ✓ Good  |
+| Decision                              | Rationale                                             | Outcome |
+| ------------------------------------- | ----------------------------------------------------- | ------- |
+| Auto-detect only, no manual override  | Simplicity — status is source of truth                | ✓ Good  |
+| Stop on first failure in epic         | Allows investigation before continuing                | ✓ Good  |
+| Sequential execution only             | Stories may have dependencies                         | ✓ Good  |
+| yaml.v3 instead of Viper for status   | Simpler for single file with known structure          | ✓ Good  |
+| Package-level router function         | Pure mapping with no state needed                     | ✓ Good  |
+| StatusReader injected via App struct  | Testability — allows mock injection                   | ✓ Good  |
+| Done stories skipped in queue         | Allows mixed-status batches without failure           | ✓ Good  |
+| Epic reuses QueueRunner               | DRY — inherits all routing, skip, and fail-fast logic | ✓ Good  |
+| Interface-based DI for lifecycle      | WorkflowRunner, StatusReader, StatusWriter interfaces | ✓ Good  |
+| Fail-fast on workflow or status fail  | Allows investigation before continuing                | ✓ Good  |
+| Manager pattern for state             | Testable file operations with injected directory      | ✓ Good  |
+| Atomic writes for state files         | Temp file + rename prevents corruption                | ✓ Good  |
+| SetProgressCallback (not constructor) | Optional callback keeps NewExecutor signature simple  | ✓ Good  |
 
 ---
 
-_Last updated: 2026-01-08 after v1.0 milestone_
+_Last updated: 2026-01-09 after v1.1 milestone_

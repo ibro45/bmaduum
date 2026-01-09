@@ -2,19 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-01-08)
+See: .planning/PROJECT.md (updated 2026-01-09)
 
-**Core value:** Run the complete story lifecycle (create→dev→review→commit) for each story before moving to the next, with error recovery, dry-run mode, and enhanced progress UI.
-**Current focus:** v1.1 Full Story Lifecycle — Phase 13 complete (Milestone complete!)
+**Core value:** Fully automated story lifecycle execution — run a story once and watch it complete from current status to done, with auto-status updates and error recovery.
+**Current focus:** v1.1 Full Story Lifecycle — SHIPPED
 
 ## Current Position
 
 Phase: 13 of 13 (Enhanced Progress UI)
-Plan: 1 of 1 in current phase
-Status: Phase complete
-Last activity: 2026-01-09 — Completed 13-01-PLAN.md
+Plan: Complete
+Status: Milestone v1.1 shipped
+Last activity: 2026-01-09 — v1.1 milestone complete
 
-Progress: ██████████ 100%
+Progress: ████████████████████ 100% (v1.1 complete)
 
 ## Performance Metrics
 
@@ -24,6 +24,13 @@ Progress: ██████████ 100%
 - Average duration: 2.8 min
 - Total execution time: 14 min
 - Same-day completion
+
+**v1.1 Summary:**
+
+- Total plans completed: 11
+- Phases: 8 (Phase 6-13)
+- Files modified: 48 (+7,984 lines, -534 lines)
+- Timeline: ~12 hours (same day)
 
 **By Phase:**
 
@@ -47,15 +54,7 @@ Progress: ██████████ 100%
 
 ### Decisions
 
-All v1.0 decisions documented in PROJECT.md Key Decisions table with good outcomes.
-
-**v1.1 Decisions:**
-| Decision | Rationale | Outcome |
-|----------|-----------|---------|
-| Full lifecycle per story | Epic should complete create→dev→review→commit for each story before moving to next | TBD |
-| Auto git-commit+push | After successful code-review, automatically run git-commit and push | TBD |
-| Resume capability | Save state on failure, allow --resume to continue | TBD |
-| Dry-run mode | Preview workflow sequence without executing | TBD |
+All v1.0 and v1.1 decisions documented in PROJECT.md Key Decisions table with good outcomes.
 
 ### Deferred Issues
 
@@ -63,7 +62,8 @@ None
 
 ### Roadmap Evolution
 
-- Milestone v1.1 created: Full Story Lifecycle, 8 phases (Phase 6-13)
+- v1.0 Status-Based Workflow Routing: SHIPPED 2026-01-08
+- v1.1 Full Story Lifecycle: SHIPPED 2026-01-09
 
 ### Blockers/Concerns
 
@@ -72,5 +72,5 @@ None
 ## Session Continuity
 
 Last session: 2026-01-09
-Stopped at: Completed 13-01-PLAN.md (Phase 13 complete, Milestone complete)
+Stopped at: v1.1 milestone complete
 Resume file: None
