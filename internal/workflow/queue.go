@@ -11,6 +11,11 @@ import (
 	"bmad-automate/internal/status"
 )
 
+// StatusReader is the interface for reading story status.
+type StatusReader interface {
+	GetStoryStatus(storyKey string) (status.Status, error)
+}
+
 // QueueRunner processes multiple stories in sequence.
 type QueueRunner struct {
 	runner *Runner
@@ -23,7 +28,7 @@ func NewQueueRunner(runner *Runner) *QueueRunner {
 
 // RunQueueWithStatus executes the appropriate workflow for each story based on status.
 // Done stories are skipped. It stops on the first failure.
-func (q *QueueRunner) RunQueueWithStatus(ctx context.Context, storyKeys []string, statusReader *status.Reader) int {
+func (q *QueueRunner) RunQueueWithStatus(ctx context.Context, storyKeys []string, statusReader StatusReader) int {
 	queueStart := time.Now()
 	results := make([]output.StoryResult, 0, len(storyKeys))
 

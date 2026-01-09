@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -14,14 +15,32 @@ import (
 	"bmad-automate/internal/workflow"
 )
 
+// WorkflowRunner is the interface for running workflows.
+type WorkflowRunner interface {
+	RunSingle(ctx context.Context, workflowName, storyKey string) int
+	RunRaw(ctx context.Context, prompt string) int
+}
+
+// StatusReader is the interface for reading story status.
+type StatusReader interface {
+	GetStoryStatus(storyKey string) (status.Status, error)
+	GetEpicStories(epicID string) ([]string, error)
+}
+
+// StatusWriter is the interface for updating story status.
+type StatusWriter interface {
+	UpdateStatus(storyKey string, newStatus status.Status) error
+}
+
 // App holds the application dependencies.
 type App struct {
 	Config       *config.Config
 	Executor     claude.Executor
 	Printer      output.Printer
-	Runner       *workflow.Runner
+	Runner       WorkflowRunner
 	Queue        *workflow.QueueRunner
-	StatusReader *status.Reader
+	StatusReader StatusReader
+	StatusWriter StatusWriter
 }
 
 // NewApp creates a new application with all dependencies wired up.
@@ -40,6 +59,7 @@ func NewApp(cfg *config.Config) *App {
 	runner := workflow.NewRunner(executor, printer, cfg)
 	queue := workflow.NewQueueRunner(runner)
 	statusReader := status.NewReader("")
+	statusWriter := status.NewWriter("")
 
 	return &App{
 		Config:       cfg,
@@ -48,6 +68,7 @@ func NewApp(cfg *config.Config) *App {
 		Runner:       runner,
 		Queue:        queue,
 		StatusReader: statusReader,
+		StatusWriter: statusWriter,
 	}
 }
 
