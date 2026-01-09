@@ -210,3 +210,96 @@ func TestExecute(t *testing.T) {
 		})
 	}
 }
+
+func TestGetSteps(t *testing.T) {
+	tests := []struct {
+		name          string
+		storyKey      string
+		currentStatus status.Status
+		getStatusErr  error
+		wantSteps     []router.LifecycleStep
+		wantErr       error
+	}{
+		{
+			name:          "story in backlog returns all 4 steps",
+			storyKey:      "EPIC-1-story",
+			currentStatus: status.StatusBacklog,
+			wantSteps: []router.LifecycleStep{
+				{Workflow: "create-story", NextStatus: status.StatusReadyForDev},
+				{Workflow: "dev-story", NextStatus: status.StatusReview},
+				{Workflow: "code-review", NextStatus: status.StatusDone},
+				{Workflow: "git-commit", NextStatus: status.StatusDone},
+			},
+		},
+		{
+			name:          "story in ready-for-dev returns 3 steps",
+			storyKey:      "EPIC-1-story",
+			currentStatus: status.StatusReadyForDev,
+			wantSteps: []router.LifecycleStep{
+				{Workflow: "dev-story", NextStatus: status.StatusReview},
+				{Workflow: "code-review", NextStatus: status.StatusDone},
+				{Workflow: "git-commit", NextStatus: status.StatusDone},
+			},
+		},
+		{
+			name:          "story in review returns 2 steps",
+			storyKey:      "EPIC-1-story",
+			currentStatus: status.StatusReview,
+			wantSteps: []router.LifecycleStep{
+				{Workflow: "code-review", NextStatus: status.StatusDone},
+				{Workflow: "git-commit", NextStatus: status.StatusDone},
+			},
+		},
+		{
+			name:          "story already done returns ErrStoryComplete",
+			storyKey:      "EPIC-1-story",
+			currentStatus: status.StatusDone,
+			wantErr:       router.ErrStoryComplete,
+		},
+		{
+			name:         "get status error propagates",
+			storyKey:     "unknown-story",
+			getStatusErr: errors.New("file not found"),
+			wantErr:      errors.New("file not found"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// GetSteps should NOT call runner or writer
+			runner := &MockWorkflowRunner{}
+			reader := &MockStatusReader{
+				GetStoryStatusFunc: func(storyKey string) (status.Status, error) {
+					if tt.getStatusErr != nil {
+						return "", tt.getStatusErr
+					}
+					return tt.currentStatus, nil
+				},
+			}
+			writer := &MockStatusWriter{}
+
+			executor := NewExecutor(runner, reader, writer)
+			steps, err := executor.GetSteps(tt.storyKey)
+
+			// Check error
+			if tt.wantErr != nil {
+				require.Error(t, err)
+				if errors.Is(tt.wantErr, router.ErrStoryComplete) {
+					assert.ErrorIs(t, err, router.ErrStoryComplete)
+				} else {
+					assert.Contains(t, err.Error(), tt.wantErr.Error())
+				}
+				assert.Nil(t, steps)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantSteps, steps)
+			}
+
+			// Verify no workflows were executed
+			assert.Empty(t, runner.Calls, "GetSteps should not execute any workflows")
+
+			// Verify no status updates were made
+			assert.Empty(t, writer.Calls, "GetSteps should not update any status")
+		})
+	}
+}
