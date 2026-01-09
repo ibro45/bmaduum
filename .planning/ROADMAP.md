@@ -133,11 +133,12 @@ Plans:
 **Goal**: Preview what would happen without executing
 **Depends on**: Phase 11
 **Research**: Unlikely (internal patterns)
-**Plans**: TBD
+**Plans**: 1/2 complete
 
 Plans:
 
-- [ ] 12-01: TBD (run /gsd:plan-phase 12 to break down)
+- [x] 12-01: GetSteps Method (TDD) - Add GetSteps to lifecycle executor — completed 2026-01-09
+- [ ] 12-02: Dry Run Flags - Add --dry-run to run, queue, epic commands
 
 **Details:**
 
@@ -177,5 +178,5 @@ Plans:
 | 9. Update Epic Command      | v1.1      | 1/1            | Complete    | 2026-01-09 |
 | 10. Update Queue Command    | v1.1      | 1/1            | Complete    | 2026-01-09 |
 | 11. Error Recovery & Resume | v1.1      | 1/1            | Complete    | 2026-01-09 |
-| 12. Dry Run Mode            | v1.1      | 0/?            | Not started | -          |
+| 12. Dry Run Mode            | v1.1      | 1/2            | In progress | -          |
 | 13. Enhanced Progress UI    | v1.1      | 0/?            | Not started | -          |
