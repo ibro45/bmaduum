@@ -95,7 +95,7 @@ Plans:
 Plans:
 
 - [x] 16-01: claude, lifecycle, workflow package doc.go files
-- [ ] 16-02: cli, output package doc.go files
+- [x] 16-02: cli, output package doc.go files
 - [ ] 16-03: config, router, state, status package doc.go files
 
 #### Phase 17: Update Docs Folder
@@ -137,7 +137,7 @@ Plans:
 | ----------------------------- | --------- | -------------- | ----------- | ---------- |
 | 14. GoDoc Core Packages       | v1.2      | 3/3            | Complete    | 2026-01-09 |
 | 15. GoDoc Supporting Packages | v1.2      | 3/3            | Complete    | 2026-01-09 |
-| 16. Package Documentation     | v1.2      | 1/3            | In progress | -          |
+| 16. Package Documentation     | v1.2      | 2/3            | In progress | -          |
 | 17. Update Docs Folder        | v1.2      | 0/?            | Not started | -          |
 | 18. Contribution Guide        | v1.2      | 0/?            | Not started | -          |
 | 19. API Examples              | v1.2      | 0/?            | Not started | -          |
