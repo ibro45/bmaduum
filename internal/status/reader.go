@@ -11,22 +11,33 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// DefaultStatusPath is the default location of the sprint status file.
+// DefaultStatusPath is the canonical location of the sprint-status.yaml file
+// relative to the project root. This path is used by both [Reader] and [Writer].
 const DefaultStatusPath = "_bmad-output/implementation-artifacts/sprint-status.yaml"
 
-// Reader reads sprint status from YAML files.
+// Reader reads sprint status from YAML files at [DefaultStatusPath].
+//
+// The basePath field specifies the project root directory. When empty,
+// the current working directory is used. The full path to the status file
+// is constructed as: basePath + DefaultStatusPath.
 type Reader struct {
 	basePath string
 }
 
-// NewReader creates a new Reader with the specified base path.
+// NewReader creates a new [Reader] with the specified base path.
+//
+// The basePath is the project root directory. Pass an empty string to use
+// the current working directory.
 func NewReader(basePath string) *Reader {
 	return &Reader{
 		basePath: basePath,
 	}
 }
 
-// Read reads and parses the sprint status file.
+// Read reads and parses the complete sprint status file.
+//
+// It returns the full [SprintStatus] structure containing all story statuses.
+// Returns an error if the file cannot be read or parsed.
 func (r *Reader) Read() (*SprintStatus, error) {
 	fullPath := filepath.Join(r.basePath, DefaultStatusPath)
 
@@ -43,7 +54,10 @@ func (r *Reader) Read() (*SprintStatus, error) {
 	return &status, nil
 }
 
-// GetStoryStatus returns the status for a specific story key.
+// GetStoryStatus returns the [Status] for a specific story key.
+//
+// It reads the status file and looks up the given story. Returns an error
+// if the file cannot be read or if the story key is not found in the file.
 func (r *Reader) GetStoryStatus(storyKey string) (Status, error) {
 	sprintStatus, err := r.Read()
 	if err != nil {
@@ -59,7 +73,11 @@ func (r *Reader) GetStoryStatus(storyKey string) (Status, error) {
 }
 
 // GetEpicStories returns all story keys belonging to an epic, sorted by story number.
-// Story keys are expected to follow the pattern {epicID}-{storyNum}-{description}.
+//
+// Story keys are matched using the pattern {epicID}-{N}-*, where N is a numeric
+// story number. Results are sorted numerically by story number (1, 2, 10 not 1, 10, 2).
+//
+// Returns an error if the file cannot be read or if no stories are found for the epic.
 func (r *Reader) GetEpicStories(epicID string) ([]string, error) {
 	sprintStatus, err := r.Read()
 	if err != nil {

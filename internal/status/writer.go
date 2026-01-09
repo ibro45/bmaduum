@@ -8,20 +8,35 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Writer writes sprint status to YAML files.
+// Writer writes sprint status updates to YAML files at [DefaultStatusPath].
+//
+// It uses yaml.v3's Node API to preserve comments, ordering, and formatting
+// when updating status values. Writes are performed atomically using a
+// temporary file and rename pattern to prevent corruption.
 type Writer struct {
 	basePath string
 }
 
-// NewWriter creates a new Writer with the specified base path.
+// NewWriter creates a new [Writer] with the specified base path.
+//
+// The basePath is the project root directory. Pass an empty string to use
+// the current working directory.
 func NewWriter(basePath string) *Writer {
 	return &Writer{
 		basePath: basePath,
 	}
 }
 
-// UpdateStatus updates the status for a specific story key in sprint-status.yaml.
-// It uses yaml.Node to preserve comments, ordering, and formatting.
+// UpdateStatus atomically updates the [Status] for a specific story key.
+//
+// The update process:
+//  1. Validates that newStatus is a known valid status
+//  2. Reads the existing file into a yaml.Node tree (preserves formatting)
+//  3. Locates and updates the story's status value
+//  4. Writes to a temporary file, then renames for atomic update
+//
+// Returns an error if the status is invalid, the file cannot be read/written,
+// or the story key is not found.
 func (w *Writer) UpdateStatus(storyKey string, newStatus Status) error {
 	// Validate the new status
 	if !newStatus.IsValid() {
