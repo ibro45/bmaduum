@@ -1,16 +1,19 @@
 # bmad-automate
 
-A CLI tool for automating development workflows with Claude AI.
+A CLI tool for automating [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) development workflows with Claude AI.
 
 ## Overview
 
-`bmad-automate` orchestrates Claude to run development workflows including story creation, implementation, code review, and git operations. It's designed to automate repetitive development tasks by delegating them to Claude with predefined prompts.
+`bmad-automate` orchestrates Claude to run [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) development workflows including story creation, implementation, code review, and git operations. It's designed to automate repetitive development tasks by delegating them to Claude with predefined prompts.
 
 ## Features
 
 - **Workflow Automation** - Run predefined workflows (create-story, dev-story, code-review, git-commit)
-- **Full Cycle Execution** - Execute all workflow steps in sequence with a single command
+- **Status-Based Routing** - Automatically determines next workflow based on story status
+- **Full Lifecycle Execution** - Run a story from current status to completion with a single command
+- **Epic Processing** - Process all stories in an epic in order
 - **Queue Processing** - Process multiple stories in batch
+- **Dry Run Mode** - Preview workflows without executing them
 - **Configurable Prompts** - Customize workflow prompts via YAML configuration
 - **Streaming Output** - Real-time feedback from Claude's execution
 - **Styled Terminal Output** - Clean, readable output with progress indicators
@@ -50,7 +53,7 @@ just build
 
 ```bash
 # Create a story definition
-bmad-automate create-story <story-key>
+bmad-automate create-story <story-key> # eg 1-5
 
 # Implement a story
 bmad-automate dev-story <story-key>
@@ -62,25 +65,78 @@ bmad-automate code-review <story-key>
 bmad-automate git-commit <story-key>
 ```
 
-### Full Cycle
+### Full Lifecycle
 
-Run all workflow steps in sequence:
+Run a story from its current status to completion:
 
 ```bash
 bmad-automate run <story-key>
 ```
 
-This executes: `create-story` → `dev-story` → `code-review` → `git-commit`
+This executes all remaining workflows based on the story's current status:
+
+- `backlog` → create-story → dev-story → code-review → git-commit → done
+- `ready-for-dev` → dev-story → code-review → git-commit → done
+- `in-progress` → dev-story → code-review → git-commit → done
+- `review` → code-review → git-commit → done
+- `done` → skipped (story already complete)
+
+Status is automatically updated in `sprint-status.yaml` after each successful workflow.
+
+Preview what workflows would run without executing them:
+
+```bash
+bmad-automate run <story-key> --dry-run
+```
+
+### Epic Processing
+
+Run the full lifecycle for all stories in an epic:
+
+```bash
+bmad-automate epic <epic-id>
+```
+
+This finds all stories matching the pattern `{epic-id}-{N}-*` (where N is numeric), sorts them by story number, and runs each to completion before moving to the next.
+
+Example:
+
+```bash
+bmad-automate epic 6
+# Runs 6-1-*, 6-2-*, 6-3-*, etc. each to completion in order
+```
+
+The epic command stops on the first failure. Done stories are skipped.
+
+#### Dry Run
+
+Preview what workflows would run without executing them:
+
+```bash
+bmad-automate epic 6 --dry-run
+```
 
 ### Queue Processing
 
-Process multiple stories in batch:
+Run the full lifecycle for multiple stories in batch:
 
 ```bash
-bmad-automate queue story-1 story-2 story-3
+bmad-automate queue <story-key> [story-key...]
 ```
 
-The queue stops on the first failure.
+Each story is run to completion before moving to the next. The queue stops on the first failure. Done stories are skipped.
+
+Example:
+
+```bash
+bmad-automate queue 6-5 6-6 6-7 6-8
+```
+
+Preview what workflows would run without executing them:
+
+```bash
+bmad-automate queue 6-5 6-6 6-7 --dry-run
+```
 
 ### Raw Prompts
 
@@ -140,6 +196,33 @@ output:
 | `BMAD_CONFIG_PATH` | Path to custom config file | `./config/workflows.yaml` |
 | `BMAD_CLAUDE_PATH` | Path to Claude binary      | `claude`                  |
 
+### Sprint Status File
+
+The `run`, `queue`, and `epic` commands read and update story status from:
+
+```
+_bmad-output/implementation-artifacts/sprint-status.yaml
+```
+
+Example format:
+
+```yaml
+development_status:
+  6-1-setup-project: done
+  6-2-add-feature: in-progress
+  6-3-fix-bug: backlog
+```
+
+Valid status values:
+
+| Status          | Description                       |
+| --------------- | --------------------------------- |
+| `backlog`       | Story not yet started             |
+| `ready-for-dev` | Story ready for implementation    |
+| `in-progress`   | Story currently being implemented |
+| `review`        | Story in code review              |
+| `done`          | Story complete                    |
+
 ## Development
 
 ### Prerequisites
@@ -171,9 +254,13 @@ bmad-automate/
 ├── config/                # Default configuration
 ├── internal/
 │   ├── cli/               # Cobra CLI commands
-│   ├── claude/            # Claude client and parser
-│   ├── config/            # Configuration loading
+│   ├── claude/            # Claude client and JSON parser
+│   ├── config/            # Configuration loading (Viper)
+│   ├── lifecycle/         # Story lifecycle execution
 │   ├── output/            # Terminal output formatting
+│   ├── router/            # Status-based workflow routing
+│   ├── state/             # State machine definitions
+│   ├── status/            # Sprint status file reader/writer
 │   └── workflow/          # Workflow orchestration
 ├── justfile               # Task runner configuration
 └── README.md
