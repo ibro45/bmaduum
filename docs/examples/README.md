@@ -1,6 +1,6 @@
 # CLI Cookbook
 
-Quick-start recipes for common `bmad-automate` workflows. Each recipe shows a complete command pattern you can adapt to your stories.
+Quick-start recipes for common `bmaduum` workflows. Each recipe shows a complete command pattern you can adapt to your stories.
 
 For flag details, see [CLI Reference](../CLI_REFERENCE.md). For concepts and setup, see [User Guide](../USER_GUIDE.md).
 

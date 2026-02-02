@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"bmad-automate/internal/status"
+	"bmaduum/internal/status"
 )
 
 func TestGetLifecycle(t *testing.T) {

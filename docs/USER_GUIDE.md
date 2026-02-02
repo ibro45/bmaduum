@@ -17,7 +17,7 @@ A practical guide to using `bmaduum` for automating development workflows.
 
 ### Prerequisites
 
-1. **Go 1.21+** installed
+1. **Go 1.25+** installed
 2. **Claude CLI** installed and configured ([installation guide](https://github.com/anthropics/claude-code))
 3. **just** command runner (optional but recommended)
 
@@ -45,59 +45,19 @@ bmaduum --help
 
 ## Basic Usage
 
-### Working with Individual Stories
+### Recommended: Status-Based Automation
 
-#### 1. Create a Story
-
-Generate a story definition from a story key:
+The `story` command automatically runs the appropriate workflows based on the story's current status:
 
 ```bash
-bmaduum create-story PROJ-123
+# Run full lifecycle for a single story
+bmaduum story 6-1-setup-project
+
+# Run multiple stories
+bmaduum story 6-1-auth 6-2-dashboard 6-3-tests
 ```
 
-This runs Claude with a prompt to create the story definition based on your configured template.
-
-#### 2. Implement the Story
-
-Run the development workflow:
-
-```bash
-bmaduum dev-story PROJ-123
-```
-
-Claude will:
-
-- Read the story requirements
-- Implement the feature
-- Run tests after each change
-
-#### 3. Review the Code
-
-Run code review on your changes:
-
-```bash
-bmaduum code-review PROJ-123
-```
-
-Claude reviews the code and automatically fixes issues.
-
-#### 4. Commit and Push
-
-Create a commit and push to remote:
-
-```bash
-bmaduum git-commit PROJ-123
-```
-
-### Status-Based Automation
-
-Instead of manually running each step, let `bmaduum` determine what to do:
-
-```bash
-bmaduum run PROJ-123
-```
-
-The `run` command now executes the **complete lifecycle** from the story's current status all the way to `done`. It auto-updates the status after each successful step and stops at completion or on the first failure.
+The `story` command reads the story's current status and executes all remaining workflows until completion:
 
 | Story Status    | Remaining Lifecycle                                            |
 | --------------- | -------------------------------------------------------------- |
@@ -107,136 +67,40 @@ The `run` command now executes the **complete lifecycle** from the story's curre
 | `review`        | code-review -> git-commit -> done                              |
 | `done`          | No action (story already complete)                             |
 
-### Full Lifecycle Execution
-
-The `run` command processes stories through their entire remaining lifecycle automatically:
-
-```bash
-bmaduum run PROJ-123
-```
-
-**Example output:**
-
-```
-[1/4] create-story
-  ... workflow output ...
-
-[2/4] dev-story
-  ... workflow output ...
-
-[3/4] code-review
-  ... workflow output ...
-
-[4/4] git-commit
-  ... workflow output ...
-
-Story PROJ-123 completed successfully
-```
-
-**How it works:**
-
-1. Reads the story's current status from `sprint-status.yaml`
-2. Determines remaining lifecycle steps based on status
-3. Executes each workflow in sequence
-4. Updates status in `sprint-status.yaml` after each successful step
-5. Stops at `done` or on first failure
-
-### Dry Run Mode
-
-Preview what workflows will run without executing them:
-
-```bash
-bmaduum run --dry-run PROJ-123
-```
-
-**Example output:**
-
-```
-Dry run for story PROJ-123:
-  1. create-story -> ready-for-dev
-  2. dev-story -> review
-  3. code-review -> done
-  4. git-commit -> done
-```
-
-Dry run is available for all lifecycle commands:
-
-```bash
-bmaduum run --dry-run PROJ-123           # Single story
-bmaduum queue --dry-run PROJ-123 PROJ-124  # Multiple stories
-bmaduum epic --dry-run 05                # All stories in epic
-```
-
-### Error Recovery
-
-When a workflow fails, the tool saves execution state so you can resume from the point of failure:
-
-**State file:** `.bmad-state.json`
-
-```json
-{
-	"story_key": "PROJ-123",
-	"step_index": 2,
-	"total_steps": 4,
-	"start_status": "backlog"
-}
-```
-
-**Resuming after failure:**
-
-```bash
-# Workflow fails at step 2 (dev-story)
-bmaduum run PROJ-123
-# Error: workflow failed: dev-story returned exit code 1
-
-# Fix the issue, then re-run
-bmaduum run PROJ-123
-# Continues from current status (no work is lost)
-```
-
-The state file is automatically cleared on successful completion.
-
-### Batch Processing
-
-Process multiple stories at once:
-
-```bash
-bmaduum queue PROJ-123 PROJ-124 PROJ-125
-```
-
-The queue:
-
-- Runs each story through its **full lifecycle** to completion
-- Auto-updates status after each successful workflow step
-- Skips completed stories
-- Stops on first failure
-- Shows a summary at the end
-
-Use `--dry-run` to preview the full execution plan:
-
-```bash
-bmaduum queue --dry-run PROJ-123 PROJ-124 PROJ-125
-```
-
 ### Processing Epics
 
-Run all stories in one or more epics through their full lifecycle:
+Process entire epics or all active epics:
 
 ```bash
 # Single epic
-bmaduum epic 05
+bmaduum epic 6
 
 # Multiple epics
-bmaduum epic 02 04 06
+bmaduum epic 2 4 6
+
+# All active epics
+bmaduum epic all
 ```
 
-This finds all stories matching the pattern `{epic-id}-{N}-*` (e.g., `05-01-auth`, `05-02-dashboard`), sorts them by story number, and runs each through its complete lifecycle to completion.
+This finds all stories matching the pattern `{epic-id}-{N}-*` (e.g., `6-1-auth`, `6-2-dashboard`), sorts them by story number, and runs each through its complete lifecycle.
 
-Use `--dry-run` to preview:
+### Individual Workflow Steps (Advanced)
+
+For advanced use cases, you can run individual workflow steps directly:
 
 ```bash
-bmaduum epic --dry-run 02 04 06
+bmaduum workflow create-story 6-1-setup-project
+bmaduum workflow dev-story 6-1-setup-project
+bmaduum workflow code-review 6-1-setup-project
+bmaduum workflow git-commit 6-1-setup-project
 ```
+
+Use these when:
+- A workflow fails and you want to retry just that step
+- You need to run a step out of sequence for debugging
+- You're testing or developing workflow prompts
+
+Most users should use `story` or `epic` commands instead.
 
 ### Ad-Hoc Prompts
 
@@ -257,7 +121,7 @@ Override with environment variable:
 
 ```bash
 export BMADUUM_CONFIG_PATH=/path/to/custom/config.yaml
-bmaduum run PROJ-123
+bmaduum story 6-1-setup-project
 ```
 
 ### Customizing Workflows
@@ -341,12 +205,10 @@ _bmad-output/implementation-artifacts/sprint-status.yaml
 
 ```yaml
 development_status:
-  PROJ-123: ready-for-dev
-  PROJ-124: in-progress
-  PROJ-125: review
-  PROJ-126: done
-  05-01-auth: backlog
-  05-02-dashboard: ready-for-dev
+  6-1-setup-project: ready-for-dev
+  6-2-add-authentication: in-progress
+  6-3-fix-bug: review
+  6-4-documentation: done
 ```
 
 ### Valid Status Values
@@ -361,46 +223,36 @@ development_status:
 
 ## Workflow Patterns
 
-### Pattern 1: Sequential Development
+### Pattern 1: Full Lifecycle (Recommended)
 
-Run each step manually for full control:
-
-```bash
-bmaduum create-story PROJ-123
-# Review the story definition
-bmaduum dev-story PROJ-123
-# Test the implementation manually
-bmaduum code-review PROJ-123
-# Verify fixes
-bmaduum git-commit PROJ-123
-```
-
-### Pattern 2: Status-Driven
-
-Let the tool figure out what to do:
+Let the tool handle the entire lifecycle:
 
 ```bash
-# Run whatever step is needed next
-bmaduum run PROJ-123
-
-# Run again after updating status
-bmaduum run PROJ-123
+bmaduum story 6-1-setup-project
 ```
 
-### Pattern 3: Batch Sprint
+### Pattern 2: Batch Processing
 
-Process an entire sprint's stories:
+Process multiple stories:
 
 ```bash
-bmaduum queue SPRINT-1 SPRINT-2 SPRINT-3 SPRINT-4 SPRINT-5
+bmaduum story 6-1-setup 6-2-auth 6-3-tests
 ```
 
-### Pattern 4: Epic Processing
+### Pattern 3: Epic Processing
 
 Process all stories in an epic:
 
 ```bash
-bmaduum epic 05
+bmaduum epic 6
+```
+
+### Pattern 4: All Active Epics
+
+Process all active epics:
+
+```bash
+bmaduum epic all
 ```
 
 ### Pattern 5: Investigation
@@ -416,6 +268,72 @@ bmaduum raw "What tests have the most failures?"
 
 # Generate reports
 bmaduum raw "Create a summary of recent changes"
+```
+
+## Dry Run Mode
+
+Preview what workflows will run without executing them:
+
+```bash
+# Single story
+bmaduum story --dry-run 6-1-setup-project
+
+# Multiple stories
+bmaduum story --dry-run 6-1-setup 6-2-auth
+
+# Epic
+bmaduum epic --dry-run 6
+
+# All active epics
+bmaduum epic --dry-run all
+```
+
+**Example output:**
+
+```
+Dry run for story 6-1-setup-project:
+  1. create-story -> ready-for-dev
+  2. dev-story -> review
+  3. code-review -> done
+  4. git-commit -> done
+```
+
+## Error Recovery
+
+### State Persistence
+
+When a workflow fails, the tool saves execution state to `.bmad-state.json`:
+
+```json
+{
+	"story_key": "6-1-setup-project",
+	"step_index": 2,
+	"total_steps": 4,
+	"start_status": "backlog"
+}
+```
+
+### Resuming After Failure
+
+```bash
+# Workflow fails at step 2 (dev-story)
+bmaduum story 6-1-setup-project
+# Error: workflow failed: dev-story returned exit code 1
+
+# Fix the issue, then re-run
+bmaduum story 6-1-setup-project
+# Continues from current status (no work is lost)
+```
+
+The state file is automatically cleared on successful completion.
+
+### Force Fresh Start
+
+Delete the state file to restart from the story's current status:
+
+```bash
+rm .bmad-state.json
+bmaduum story 6-1-setup-project
 ```
 
 ## Understanding Output
@@ -445,16 +363,21 @@ drwxr-xr-x   5 user  staff   160 Jan  8 09:00 ..
 | ✗      | Failure     |
 | ○      | Skipped     |
 
-### Queue Summary
+### Completion Summary
 
 After processing multiple stories:
 
 ```
-Summary:
-  PROJ-123  ✓  1m 23s
-  PROJ-124  ✓  2m 45s
-  PROJ-125  ○  skipped (done)
-  PROJ-126  ✗  failed at dev-story (45s)
+─── Story 1 of 3: 6-1-setup-project
+Story 6-1-setup-project completed successfully
+
+─── Story 2 of 3: 6-2-add-authentication
+Story 6-2-add-authentication completed successfully
+
+─── Story 3 of 3: 6-3-fix-bug
+Story 6-3-fix-bug is already complete, skipping
+
+All 3 stories processed (2 completed, 1 skipped)
 ```
 
 ## Error Handling
@@ -466,24 +389,6 @@ Summary:
 | 0    | Success                             |
 | 1    | General error                       |
 | N    | Claude's exit code (passed through) |
-
-### Resume Capability
-
-When a lifecycle execution fails, the tool persists state to `.bmad-state.json`. This enables resume from the point of failure:
-
-1. **Failure occurs** - State is saved with current story and step index
-2. **Fix the issue** - Address whatever caused the failure
-3. **Re-run the command** - Execution continues from current status
-
-The state file is automatically deleted after successful lifecycle completion.
-
-### State File Location
-
-```
-.bmad-state.json   # In working directory (hidden file)
-```
-
-You can safely delete this file to force a fresh start from the story's current status.
 
 ### Common Issues
 
@@ -506,7 +411,7 @@ Solution: Create the config file or set `BMADUUM_CONFIG_PATH`.
 **Story not in status file:**
 
 ```
-Error: story PROJ-999 not found in sprint status
+Error: story 9-99-not-found not found in sprint status
 ```
 
 Solution: Add the story to `sprint-status.yaml`.
@@ -521,46 +426,73 @@ Solution: Use a valid status: `backlog`, `ready-for-dev`, `in-progress`, `review
 
 ## Tips and Best Practices
 
-### 1. Start Small
+### 1. Use Story Keys That Follow Your Convention
 
-Begin with single story commands to understand the workflow:
+Story keys appear in commits and prompts. Use meaningful identifiers that match your project:
 
-```bash
-bmaduum create-story TEST-001
-```
+- BMAD-style: `6-1-setup`, `6-2-auth`, `6-3-tests`
+- JIRA-style: `PROJ-123`, `PROJ-124`
+- Descriptive: `feat-user-profile`, `bug-login-fix`
 
-### 2. Review Output
-
-Always review Claude's output before moving to the next step. The streaming output shows exactly what Claude is doing.
-
-### 3. Use Descriptive Story Keys
-
-Story keys appear in commits and prompts. Use meaningful identifiers:
-
-- Good: `AUTH-001`, `FEAT-user-profile`, `BUG-login-fix`
-- Bad: `x`, `test`, `123`
-
-### 4. Customize Prompts for Your Project
+### 2. Customize Prompts for Your Project
 
 Edit the prompt templates to match your project's conventions, coding standards, and requirements.
 
-### 5. Keep Status File Updated
+### 3. Keep Status File Updated
 
 The status file is the source of truth for automation. Keep it current as stories progress.
 
-### 6. Handle Failures Gracefully
+### 4. Handle Failures Gracefully
 
-When a queue stops on failure:
+When processing stops on failure:
 
 1. Review the error
 2. Fix the issue manually or adjust the story
-3. Update the status file
-4. Re-run the queue (completed stories will be skipped)
+3. Update the status file if needed
+4. Re-run the command (completed workflows will be skipped)
 
-### 7. Use Raw for Exploration
+### 5. Use Raw for Exploration
 
 Before starting a story, use raw prompts to understand the codebase:
 
 ```bash
 bmaduum raw "What files would I need to change to add user authentication?"
 ```
+
+### 6. Use Dry Run Before Long Operations
+
+Preview what will run before committing to a long-running operation:
+
+```bash
+bmaduum story --dry-run 6-1 6-2 6-3
+bmaduum epic --dry-run all
+```
+
+## Command Reference Summary
+
+### Main Commands
+
+| Command | Purpose | Example |
+|---------|---------|---------|
+| `story` | Run full lifecycle for one or more stories | `bmaduum story 6-1-setup` |
+| `epic` | Run all stories in one or more epics | `bmaduum epic 6` |
+| `raw` | Run an arbitrary prompt | `bmaduum raw "explain this"` |
+| `version` | Display version info | `bmaduum version` |
+
+### Advanced Commands
+
+| Command | Purpose | Example |
+|---------|---------|---------|
+| `workflow create-story` | Create story definition | `bmaduum workflow create-story 6-1` |
+| `workflow dev-story` | Implement a story | `bmaduum workflow dev-story 6-1` |
+| `workflow code-review` | Review code changes | `bmaduum workflow code-review 6-1` |
+| `workflow git-commit` | Commit and push changes | `bmaduum workflow git-commit 6-1` |
+
+### Global Flags
+
+| Flag | Available On | Description |
+|------|--------------|-------------|
+| `--dry-run` | `story`, `epic` | Preview without executing |
+| `--auto-retry` | `story`, `epic` | Retry on rate limit errors |
+| `--tui` | `story` | Enable interactive TUI mode |
+| `--auto-retry` | `workflow` subcommands | Retry on rate limit errors |

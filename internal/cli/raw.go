@@ -14,7 +14,7 @@ func newRawCommand(app *App) *cobra.Command {
 Useful for testing or one-off commands.
 
 Example:
-  bmad-automate raw "List all Go files in the project"`,
+  bmaduum raw "List all Go files in the project"`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			prompt := strings.Join(args, " ")

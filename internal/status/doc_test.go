@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"bmad-automate/internal/status"
+	"bmaduum/internal/status"
 )
 
 // This example demonstrates using Reader to read sprint status from YAML files.

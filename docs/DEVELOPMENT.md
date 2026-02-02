@@ -1,6 +1,6 @@
 # Development Guide
 
-Complete guide for developing and extending `bmad-automate`.
+Complete guide for developing and extending `bmaduum`.
 
 ## Development Setup
 
@@ -14,8 +14,8 @@ Complete guide for developing and extending `bmad-automate`.
 ### Clone and Build
 
 ```bash
-git clone https://github.com/yourusername/bmad-automate.git
-cd bmad-automate
+git clone https://github.com/yourusername/bmaduum.git
+cd bmaduum
 
 # Install dependencies
 go mod download
@@ -23,7 +23,7 @@ go mod download
 # Build
 just build
 # OR
-go build -o bmad-automate ./cmd/bmad-automate
+go build -o bmaduum ./cmd/bmaduum
 ```
 
 ### Verify Setup
@@ -42,9 +42,9 @@ just check
 ## Project Structure
 
 ```
-bmad-automate/
+bmaduum/
 ├── cmd/
-│   └── bmad-automate/
+│   └── bmaduum/
 │       └── main.go              # Entry point
 │
 ├── internal/
@@ -118,7 +118,7 @@ bmad-automate/
 
 ```bash
 just              # List all tasks
-just build        # Build binary to ./bmad-automate
+just build        # Build binary to ./bmaduum
 just test         # Run all tests
 just test-verbose # Run tests with verbose output
 just test-pkg ./internal/claude  # Test specific package
@@ -198,8 +198,8 @@ import (
 
     "github.com/stretchr/testify/assert"
 
-    "bmad-automate/internal/claude"
-    "bmad-automate/internal/config"
+    "bmaduum/internal/claude"
+    "bmaduum/internal/config"
 )
 
 func TestMyCommand(t *testing.T) {
@@ -458,7 +458,7 @@ exitCode, _ := executor.ExecuteWithResult(ctx, prompt, customHandler)
 just test-verbose
 
 # Build and run with debug info
-go build -gcflags="all=-N -l" -o bmad-automate ./cmd/bmad-automate
+go build -gcflags="all=-N -l" -o bmaduum ./cmd/bmaduum
 ```
 
 ### Inspect Claude Communication
@@ -500,8 +500,8 @@ just lint
 just build
 
 # Cross-compile (if needed)
-GOOS=linux GOARCH=amd64 go build -o bmad-automate-linux-amd64 ./cmd/bmad-automate
-GOOS=darwin GOARCH=arm64 go build -o bmad-automate-darwin-arm64 ./cmd/bmad-automate
+GOOS=linux GOARCH=amd64 go build -o bmaduum-linux-amd64 ./cmd/bmaduum
+GOOS=darwin GOARCH=arm64 go build -o bmaduum-darwin-arm64 ./cmd/bmaduum
 ```
 
 ### 4. Tag Release

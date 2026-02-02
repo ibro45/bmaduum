@@ -27,16 +27,22 @@ A CLI tool for automating [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-ME
 go install ./cmd/bmaduum
 
 # Run a story through its full lifecycle
-bmaduum run 6-1-setup-project
+bmaduum story 6-1-setup-project
 
 # Preview what would run (dry-run)
-bmaduum run 6-1-setup-project --dry-run
+bmaduum story 6-1-setup-project --dry-run
 
-# Process entire epic
+# Process multiple stories
+bmaduum story 6-1 6-2 6-3
+
+# Process an epic
 bmaduum epic 6
 
+# Process multiple epics
+bmaduum epic 2 4 6
+
 # Process all active epics
-bmaduum all-epics
+bmaduum epic all
 ```
 
 ## Installation
@@ -79,31 +85,49 @@ just release           # Full release (requires git tag)
 
 ## Usage
 
-### Single Workflow Commands
+### Main Commands
 
 ```bash
-# Create a story definition
-bmaduum create-story <story-key> # eg 1-5
+# Run story through its full lifecycle (recommended)
+bmaduum story <story-key>
+bmaduum story 6-1 6-2 6-3
 
-# Implement a story
-bmaduum dev-story <story-key>
-
-# Run code review
-bmaduum code-review <story-key>
-
-# Commit and push changes
-bmaduum git-commit <story-key>
+# Process epics
+bmaduum epic 6
+bmaduum epic all
 ```
+
+### Advanced: Individual Workflow Steps
+
+The `story` and `epic` commands automatically run the appropriate workflows based on story status. You typically don't need to run workflows manually.
+
+For advanced use cases, individual BMAD workflow steps are available under `workflow`:
+
+```bash
+bmaduum workflow create-story <story-key>  # Create story definition
+bmaduum workflow dev-story <story-key>     # Implement a story
+bmaduum workflow code-review <story-key>  # Review code changes
+bmaduum workflow git-commit <story-key>   # Commit and push changes
+```
+
+These are the same workflow commands used in BMAD-METHOD and are automatically executed by `story` and `epic`. Use them when:
+- A workflow fails and you want to retry just that step
+- You need to run a step out of sequence for debugging
+- You're testing or developing workflow prompts
 
 ### Full Lifecycle
 
-Run a story from its current status to completion:
+Run one or more stories from their current status to completion:
 
 ```bash
-bmaduum run <story-key>
+# Single story
+bmaduum story <story-key>
+
+# Multiple stories
+bmaduum story <story-key> [story-key...]
 ```
 
-This executes all remaining workflows based on the story's current status:
+This executes all remaining workflows based on each story's current status:
 
 - `backlog` -> create-story -> dev-story -> code-review -> git-commit -> done
 - `ready-for-dev` -> dev-story -> code-review -> git-commit -> done
@@ -116,7 +140,7 @@ Status is automatically updated in `sprint-status.yaml` after each successful wo
 Preview what workflows would run without executing them:
 
 ```bash
-bmaduum run <story-key> --dry-run
+bmaduum story --dry-run 6-1 6-2 6-3
 ```
 
 ### Epic Processing
@@ -124,7 +148,14 @@ bmaduum run <story-key> --dry-run
 Run the full lifecycle for all stories in one or more epics:
 
 ```bash
+# Single epic
+bmaduum epic <epic-id>
+
+# Multiple epics
 bmaduum epic <epic-id> [epic-id...]
+
+# All active epics
+bmaduum epic all
 ```
 
 This finds all stories matching the pattern `{epic-id}-{N}-*` (where N is numeric), sorts them by story number, and runs each to completion before moving to the next.
@@ -139,6 +170,10 @@ bmaduum epic 6
 # Multiple epics
 bmaduum epic 2 4 6
 # Processes epics 2, 4, and 6 in sequence
+
+# All active epics
+bmaduum epic all
+# Auto-discovers and processes all epics with non-completed stories
 ```
 
 The epic command stops on the first failure. Done stories are skipped.
@@ -148,50 +183,8 @@ The epic command stops on the first failure. Done stories are skipped.
 Preview what workflows would run without executing them:
 
 ```bash
-bmaduum epic 2 4 6 --dry-run
-```
-
-### All Epics
-
-Run the full lifecycle for all active epics:
-
-```bash
-bmaduum all-epics
-```
-
-This command:
-- Discovers all epics with non-completed stories
-- Processes epics in numerical order
-- Processes stories within each epic in order
-- Stops on the first failure
-
-Example:
-
-```bash
-bmaduum all-epics --dry-run  # Preview all workflows
-bmaduum all-epics --auto-retry  # Run with automatic retry on rate limits
-```
-
-### Queue Processing
-
-Run the full lifecycle for multiple stories in batch:
-
-```bash
-bmaduum queue <story-key> [story-key...]
-```
-
-Each story is run to completion before moving to the next. The queue stops on the first failure. Done stories are skipped.
-
-Example:
-
-```bash
-bmaduum queue 6-5 6-6 6-7 6-8
-```
-
-Preview what workflows would run without executing them:
-
-```bash
-bmaduum queue 6-5 6-6 6-7 --dry-run
+bmaduum epic --dry-run 2 4 6
+bmaduum epic --dry-run all
 ```
 
 ### Raw Prompts
@@ -204,10 +197,10 @@ bmaduum raw "List all Go files in the project"
 
 ### Global Flags
 
-| Flag           | Description                                           | Available On                     |
-|----------------|-------------------------------------------------------|----------------------------------|
-| `--dry-run`    | Preview workflows without executing them              | `run`, `queue`, `epic`, `all-epics` |
-| `--auto-retry` | Automatically retry on failures (up to 10 times)      | `run`, `queue`, `epic`, `all-epics` |
+| Flag           | Description                                           | Available On        |
+|----------------|-------------------------------------------------------|---------------------|
+| `--dry-run`    | Preview workflows without executing them              | `story`, `epic`      |
+| `--auto-retry` | Automatically retry on failures (up to 10 times)      | `story`, `epic`      |
 
 ### Help
 
@@ -318,7 +311,7 @@ output:
 | Section | Purpose | Effect |
 |---------|---------|--------|
 | `workflows` | Defines prompts sent to Claude | Each workflow's `prompt_template` is expanded with the story key and passed to Claude CLI when that workflow runs. Customize to change how Claude behaves. |
-| `full_cycle.steps` | Defines execution order | Controls which workflows run (and in what order) for `run`, `queue`, `epic`, and `all-epics` commands. |
+| `full_cycle.steps` | Defines execution order | Controls which workflows run (and in what order) for `story` and `epic` commands. |
 | `claude.binary_path` | Claude CLI location | Path to the `claude` executable. Use this if Claude is not in your PATH or you want a specific version. |
 | `claude.output_format` | Claude output format | Should be `stream-json` (required for parsing). Do not change unless you know what you are doing. |
 | `output.truncate_lines` | Output display limit | Maximum number of lines to show per tool output. Additional lines are hidden with "... (N more lines)". |
@@ -339,12 +332,12 @@ output:
 **Example: Using a custom config file location**
 ```bash
 export BMADUUM_CONFIG_PATH=~/my-configs/bmad-workflows.yaml
-bmaduum run 6-1-setup
+bmaduum story 6-1-setup
 ```
 
 ### Sprint Status File
 
-The `run`, `queue`, `epic`, and `all-epics` commands read and update story status from:
+The `story` and `epic` commands read and update story status from:
 
 ```
 _bmad-output/implementation-artifacts/sprint-status.yaml
@@ -478,3 +471,7 @@ Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for gui
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+Forked from [bmad_automated](https://github.com/robertguss/bmad_automated) by [Robert Guss](https://github.com/robertguss). Thanks for the excellent foundation.

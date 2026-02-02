@@ -15,7 +15,7 @@ package router
 import (
 	"errors"
 
-	"bmad-automate/internal/status"
+	"bmaduum/internal/status"
 )
 
 // Sentinel errors for workflow routing.

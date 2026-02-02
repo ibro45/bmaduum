@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"bmad-automate/internal/output"
-	"bmad-automate/internal/router"
-	"bmad-automate/internal/status"
+	"bmaduum/internal/output"
+	"bmaduum/internal/router"
+	"bmaduum/internal/status"
 )
 
 // StatusReader provides story status lookup for workflow routing.

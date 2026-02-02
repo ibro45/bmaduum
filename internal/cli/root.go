@@ -1,4 +1,4 @@
-// Package cli provides the command-line interface for bmad-automate.
+// Package cli provides the command-line interface for bmaduum.
 //
 // The cli package implements Cobra-based commands for orchestrating
 // automated development workflows. It uses dependency injection via the
@@ -13,9 +13,8 @@
 //   - [ExecuteResult] - Result type returned by testable entry points
 //
 // Commands provided:
-//   - run - Execute full story lifecycle from current status to done
-//   - queue - Run lifecycle for multiple stories sequentially
-//   - epic - Run all stories in an epic
+//   - story - Execute full story lifecycle from current status to done (one or more stories)
+//   - epic - Run all stories in an epic (or all epics with "all")
 //   - raw - Execute a raw prompt directly
 //   - create-story, dev-story, code-review, git-commit - Individual workflow commands
 package cli
@@ -27,11 +26,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"bmad-automate/internal/claude"
-	"bmad-automate/internal/config"
-	"bmad-automate/internal/output"
-	"bmad-automate/internal/status"
-	"bmad-automate/internal/workflow"
+	"bmaduum/internal/claude"
+	"bmaduum/internal/config"
+	"bmaduum/internal/output"
+	"bmaduum/internal/status"
+	"bmaduum/internal/workflow"
 )
 
 // WorkflowRunner is the interface for executing development workflows.
@@ -153,17 +152,13 @@ func NewApp(cfg *config.Config) *App {
 // NewRootCommand creates the root Cobra command with all subcommands attached.
 //
 // The command tree includes:
-//   - run: Execute full story lifecycle from current status to done
-//   - queue: Run lifecycle for multiple stories sequentially
-//   - epic: Run all stories in an epic
+//   - story: Execute full story lifecycle from current status to done (one or more stories)
+//   - epic: Run all stories in an epic (or all epics)
 //   - raw: Execute a raw prompt directly
-//   - create-story: Create a new story from backlog status
-//   - dev-story: Develop a story (ready-for-dev or in-progress status)
-//   - code-review: Review code (review status)
-//   - git-commit: Commit changes after review
+//   - workflow: Run individual BMAD workflow steps (advanced)
 func NewRootCommand(app *App) *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:   "bmad-automate",
+		Use:   "bmaduum",
 		Short: "BMAD Automation CLI",
 		Long: `BMAD Automation CLI - Automate development workflows with Claude.
 
@@ -173,15 +168,10 @@ story creation, development, code review, and git operations.`,
 
 	// Add subcommands
 	rootCmd.AddCommand(
-		newCreateStoryCommand(app),
-		newDevStoryCommand(app),
-		newCodeReviewCommand(app),
-		newGitCommitCommand(app),
-		newRunCommand(app),
-		newQueueCommand(app),
+		newStoryCommand(app),
 		newEpicCommand(app),
-		newAllEpicsCommand(app),
 		newRawCommand(app),
+		newWorkflowCommand(app),
 		newVersionCommand(),
 	)
 

@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"bmad-automate/internal/claude"
-	"bmad-automate/internal/cli"
-	"bmad-automate/internal/config"
-	"bmad-automate/internal/output"
-	"bmad-automate/internal/status"
+	"bmaduum/internal/claude"
+	"bmaduum/internal/cli"
+	"bmaduum/internal/config"
+	"bmaduum/internal/output"
+	"bmaduum/internal/status"
 )
 
 // Example_app demonstrates creating an App with custom dependencies for testing.
@@ -48,7 +48,7 @@ func Example_app() {
 // Each command is attached to the root command via [cli.NewRootCommand].
 // Commands use the App's injected dependencies for execution.
 func Example_commands() {
-	// Commands available in bmad-automate:
+	// Commands available in bmaduum:
 	//
 	// Lifecycle commands (run full story workflow):
 	//   run <story-key>     - Execute full lifecycle from current status to done

@@ -1,6 +1,6 @@
 # Package Documentation
 
-Complete API reference for all internal packages in `bmad-automate`.
+Complete API reference for all internal packages in `bmaduum`.
 
 ## Package Overview
 

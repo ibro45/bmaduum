@@ -8,11 +8,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"bmad-automate/internal/claude"
-	"bmad-automate/internal/config"
-	"bmad-automate/internal/output"
-	"bmad-automate/internal/status"
-	"bmad-automate/internal/workflow"
+	"bmaduum/internal/claude"
+	"bmaduum/internal/config"
+	"bmaduum/internal/output"
+	"bmaduum/internal/status"
+	"bmaduum/internal/workflow"
 )
 
 func setupTestApp() *App {
@@ -56,7 +56,7 @@ func TestNewRootCommand(t *testing.T) {
 	rootCmd := NewRootCommand(app)
 
 	assert.NotNil(t, rootCmd)
-	assert.Equal(t, "bmad-automate", rootCmd.Use)
+	assert.Equal(t, "bmaduum", rootCmd.Use)
 	assert.Contains(t, rootCmd.Short, "BMAD")
 }
 
@@ -65,12 +65,9 @@ func TestNewRootCommand_HasAllSubcommands(t *testing.T) {
 	rootCmd := NewRootCommand(app)
 
 	expectedCommands := []string{
-		"create-story",
-		"dev-story",
-		"code-review",
-		"git-commit",
-		"run",
-		"queue",
+		"story",
+		"epic",
+		"workflow",
 		"raw",
 	}
 
@@ -83,87 +80,87 @@ func TestNewRootCommand_HasAllSubcommands(t *testing.T) {
 	for _, expected := range expectedCommands {
 		assert.Contains(t, commandNames, expected, "missing subcommand: %s", expected)
 	}
+
+	// Verify workflow has the expected subcommands
+	workflowCmd := findCommand(rootCmd, "workflow")
+	require.NotNil(t, workflowCmd, "workflow command not found")
+
+	expectedSubcommands := []string{
+		"create-story",
+		"dev-story",
+		"code-review",
+		"git-commit",
+	}
+
+	subcommands := workflowCmd.Commands()
+	subcommandNames := make([]string, len(subcommands))
+	for i, cmd := range subcommands {
+		subcommandNames[i] = cmd.Name()
+	}
+
+	for _, expected := range expectedSubcommands {
+		assert.Contains(t, subcommandNames, expected, "missing workflow subcommand: %s", expected)
+	}
 }
 
-func TestCreateStoryCommand(t *testing.T) {
+func TestWorkflowCommand(t *testing.T) {
 	app := setupTestApp()
-	cmd := newCreateStoryCommand(app)
+	cmd := newWorkflowCommand(app)
 
-	assert.Equal(t, "create-story <story-key>", cmd.Use)
+	assert.Equal(t, "workflow <workflow-name> <story-key>", cmd.Use)
 	assert.NotEmpty(t, cmd.Short)
 	assert.NotEmpty(t, cmd.Long)
 
-	// Test args validation - should require exactly 1 arg
+	// Test args validation - should require at least 2 args (workflow-name, story-key)
 	err := cmd.Args(cmd, []string{})
 	assert.Error(t, err)
 
-	err = cmd.Args(cmd, []string{"story-1"})
-	assert.NoError(t, err)
-
-	err = cmd.Args(cmd, []string{"story-1", "extra"})
-	assert.Error(t, err)
-}
-
-func TestDevStoryCommand(t *testing.T) {
-	app := setupTestApp()
-	cmd := newDevStoryCommand(app)
-
-	assert.Equal(t, "dev-story <story-key>", cmd.Use)
-	assert.NotEmpty(t, cmd.Short)
-
-	// Test args validation
-	err := cmd.Args(cmd, []string{})
+	err = cmd.Args(cmd, []string{"create-story"})
 	assert.Error(t, err)
 
-	err = cmd.Args(cmd, []string{"story-1"})
+	err = cmd.Args(cmd, []string{"create-story", "story-1"})
 	assert.NoError(t, err)
 }
 
-func TestCodeReviewCommand(t *testing.T) {
+func TestWorkflowSubcommands(t *testing.T) {
 	app := setupTestApp()
-	cmd := newCodeReviewCommand(app)
+	workflowCmd := newWorkflowCommand(app)
 
-	assert.Equal(t, "code-review <story-key>", cmd.Use)
-	assert.NotEmpty(t, cmd.Short)
+	subcommands := []struct {
+		name string
+	}{
+		{"create-story"},
+		{"dev-story"},
+		{"code-review"},
+		{"git-commit"},
+	}
 
-	// Test args validation
-	err := cmd.Args(cmd, []string{"story-1"})
-	assert.NoError(t, err)
+	for _, tt := range subcommands {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := findCommand(workflowCmd, tt.name)
+			require.NotNil(t, cmd, "workflow subcommand %s not found", tt.name)
+
+			assert.Equal(t, tt.name+" <story-key>", cmd.Use)
+			assert.NotEmpty(t, cmd.Short)
+
+			// Test args validation - should require exactly 1 arg (story-key)
+			err := cmd.Args(cmd, []string{})
+			assert.Error(t, err)
+
+			err = cmd.Args(cmd, []string{"story-1"})
+			assert.NoError(t, err)
+
+			err = cmd.Args(cmd, []string{"story-1", "extra"})
+			assert.Error(t, err)
+		})
+	}
 }
 
-func TestGitCommitCommand(t *testing.T) {
+func TestStoryCommand(t *testing.T) {
 	app := setupTestApp()
-	cmd := newGitCommitCommand(app)
+	cmd := newStoryCommand(app)
 
-	assert.Equal(t, "git-commit <story-key>", cmd.Use)
-	assert.NotEmpty(t, cmd.Short)
-
-	// Test args validation
-	err := cmd.Args(cmd, []string{"story-1"})
-	assert.NoError(t, err)
-}
-
-func TestRunCommand(t *testing.T) {
-	app := setupTestApp()
-	cmd := newRunCommand(app)
-
-	assert.Equal(t, "run <story-key>", cmd.Use)
-	assert.NotEmpty(t, cmd.Short)
-	assert.NotEmpty(t, cmd.Long)
-
-	// Test args validation
-	err := cmd.Args(cmd, []string{})
-	assert.Error(t, err)
-
-	err = cmd.Args(cmd, []string{"story-1"})
-	assert.NoError(t, err)
-}
-
-func TestQueueCommand(t *testing.T) {
-	app := setupTestApp()
-	cmd := newQueueCommand(app)
-
-	assert.Equal(t, "queue <story-key> [story-key...]", cmd.Use)
+	assert.Equal(t, "story <story-key> [story-key...]", cmd.Use)
 	assert.NotEmpty(t, cmd.Short)
 	assert.NotEmpty(t, cmd.Long)
 
@@ -172,9 +169,6 @@ func TestQueueCommand(t *testing.T) {
 	assert.Error(t, err)
 
 	err = cmd.Args(cmd, []string{"story-1"})
-	assert.NoError(t, err)
-
-	err = cmd.Args(cmd, []string{"story-1", "story-2", "story-3"})
 	assert.NoError(t, err)
 }
 
@@ -222,12 +216,12 @@ func TestSubcommand_Help(t *testing.T) {
 		name    string
 		command string
 	}{
-		{"create-story help", "create-story"},
-		{"dev-story help", "dev-story"},
-		{"code-review help", "code-review"},
-		{"git-commit help", "git-commit"},
-		{"run help", "run"},
-		{"queue help", "queue"},
+			{"workflow create-story help", "workflow"},
+		{"workflow dev-story help", "workflow"},
+		{"workflow code-review help", "workflow"},
+		{"workflow git-commit help", "workflow"},
+		{"story help", "story"},
+		{"epic help", "epic"},
 		{"raw help", "raw"},
 	}
 
@@ -261,13 +255,10 @@ func TestCommandsHaveRunEFunctions(t *testing.T) {
 	rootCmd := NewRootCommand(app)
 
 	commands := []string{
-		"create-story",
-		"dev-story",
-		"code-review",
-		"git-commit",
-		"run",
-		"queue",
+		"story",
+		"epic",
 		"raw",
+		"workflow",
 	}
 
 	for _, cmdName := range commands {
@@ -275,6 +266,25 @@ func TestCommandsHaveRunEFunctions(t *testing.T) {
 			cmd := findCommand(rootCmd, cmdName)
 			require.NotNil(t, cmd, "command %s not found", cmdName)
 			assert.NotNil(t, cmd.RunE, "command %s should have a RunE function", cmdName)
+		})
+	}
+
+	// Test workflow subcommands
+	workflowCmd := findCommand(rootCmd, "workflow")
+	require.NotNil(t, workflowCmd, "workflow command not found")
+
+	workflowSubcommands := []string{
+		"create-story",
+		"dev-story",
+		"code-review",
+		"git-commit",
+	}
+
+	for _, subcmdName := range workflowSubcommands {
+		t.Run("workflow."+subcmdName, func(t *testing.T) {
+			cmd := findCommand(workflowCmd, subcmdName)
+			require.NotNil(t, cmd, "workflow subcommand %s not found", subcmdName)
+			assert.NotNil(t, cmd.RunE, "workflow subcommand %s should have a RunE function", subcmdName)
 		})
 	}
 }
@@ -304,20 +314,21 @@ func setupFailingTestApp() *App {
 }
 
 func TestCommandExecution_Success(t *testing.T) {
-	// Note: "run" and "queue" commands excluded - they require sprint-status.yaml and are tested in run_test.go/queue_test.go
+	// Note: "story" and "epic" commands excluded - they require sprint-status.yaml and are tested in their respective test files
 	tests := []struct {
+		name    string
 		command string
 		args    []string
 	}{
-		{"create-story", []string{"TEST-123"}},
-		{"dev-story", []string{"TEST-123"}},
-		{"code-review", []string{"TEST-123"}},
-		{"git-commit", []string{"TEST-123"}},
-		{"raw", []string{"hello", "world"}},
+		{"workflow create-story", "workflow", []string{"create-story", "TEST-123"}},
+		{"workflow dev-story", "workflow", []string{"dev-story", "TEST-123"}},
+		{"workflow code-review", "workflow", []string{"code-review", "TEST-123"}},
+		{"workflow git-commit", "workflow", []string{"git-commit", "TEST-123"}},
+		{"raw", "raw", []string{"hello", "world"}},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.command, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			app := setupTestApp()
 			rootCmd := NewRootCommand(app)
 
@@ -333,20 +344,21 @@ func TestCommandExecution_Success(t *testing.T) {
 }
 
 func TestCommandExecution_Failure(t *testing.T) {
-	// Note: "run" and "queue" commands excluded - they require sprint-status.yaml and are tested in run_test.go/queue_test.go
+	// Note: "story" and "epic" commands excluded - they require sprint-status.yaml and are tested in their respective test files
 	tests := []struct {
+		name    string
 		command string
 		args    []string
 	}{
-		{"create-story", []string{"TEST-123"}},
-		{"dev-story", []string{"TEST-123"}},
-		{"code-review", []string{"TEST-123"}},
-		{"git-commit", []string{"TEST-123"}},
-		{"raw", []string{"hello"}},
+		{"workflow create-story", "workflow", []string{"create-story", "TEST-123"}},
+		{"workflow dev-story", "workflow", []string{"dev-story", "TEST-123"}},
+		{"workflow code-review", "workflow", []string{"code-review", "TEST-123"}},
+		{"workflow git-commit", "workflow", []string{"git-commit", "TEST-123"}},
+		{"raw", "raw", []string{"hello"}},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.command, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			app := setupFailingTestApp()
 			rootCmd := NewRootCommand(app)
 
@@ -371,14 +383,15 @@ func TestCommandExecution_InvalidArgs(t *testing.T) {
 		command string
 		args    []string
 	}{
-		{"create-story no args", "create-story", []string{}},
-		{"dev-story no args", "dev-story", []string{}},
-		{"code-review no args", "code-review", []string{}},
-		{"git-commit no args", "git-commit", []string{}},
-		{"run no args", "run", []string{}},
-		{"queue no args", "queue", []string{}},
+		{"workflow create-story no args", "workflow", []string{"create-story"}},
+		{"workflow dev-story no args", "workflow", []string{"dev-story"}},
+		{"workflow code-review no args", "workflow", []string{"code-review"}},
+		{"workflow git-commit no args", "workflow", []string{"git-commit"}},
+		{"story no args", "story", []string{}},
+		{"epic no args", "epic", []string{}},
 		{"raw no args", "raw", []string{}},
-		{"create-story too many args", "create-story", []string{"a", "b"}},
+		{"workflow too few args", "workflow", []string{}},
+		{"workflow create-story too many args", "workflow", []string{"create-story", "a", "b"}},
 	}
 
 	for _, tt := range tests {

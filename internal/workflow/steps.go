@@ -1,4 +1,4 @@
-// Package workflow provides workflow orchestration for bmad-automate.
+// Package workflow provides workflow orchestration for bmaduum.
 //
 // Workflows execute Claude CLI with configured prompts to automate development tasks.
 // The package supports single workflow execution, raw prompt execution, and batch

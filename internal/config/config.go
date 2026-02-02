@@ -15,7 +15,7 @@ import (
 //
 // Loader uses Viper to load configuration from YAML files and environment
 // variables, merging them with default values. The loader supports the
-// BMAD_ environment variable prefix for all configuration options.
+// BMADUUM_ environment variable prefix for all configuration options.
 type Loader struct {
 	// v is the Viper instance used for configuration loading.
 	v *viper.Viper
@@ -34,13 +34,17 @@ func NewLoader() *Loader {
 // Load loads configuration from the default locations and environment.
 //
 // Configuration is loaded and merged with the following priority (highest first):
-//  1. Environment variables with BMAD_ prefix (e.g., BMAD_CLAUDE_PATH)
-//  2. Config file specified by BMAD_CONFIG_PATH environment variable
-//  3. ./config/workflows.yaml in the current directory
-//  4. [DefaultConfig] built-in defaults
+//  1. Environment variables with BMADUUM_ prefix (e.g., BMADUUM_CLAUDE_BINARY_PATH)
+//  2. Config file specified by BMADUUM_CONFIG_PATH environment variable
+//  3. User config directory: ~/.config/bmaduum/workflows.yaml (Linux),
+//     ~/Library/Application Support/bmaduum/workflows.yaml (macOS),
+//     %APPDATA%\bmaduum\workflows.yaml (Windows)
+//  4. ./config/workflows.yaml in the current directory (legacy fallback)
+//  5. ./workflows.yaml in the current directory (legacy fallback)
+//  6. [DefaultConfig] built-in defaults
 //
 // Environment variable names use underscores for nested keys. For example,
-// claude.binary_path becomes BMAD_CLAUDE_BINARY_PATH.
+// claude.binary_path becomes BMADUUM_CLAUDE_BINARY_PATH.
 //
 // Returns an error if a config file exists but cannot be parsed. Missing
 // config files are not an error; the loader falls back to defaults.
@@ -50,17 +54,27 @@ func (l *Loader) Load() (*Config, error) {
 
 	// Set up Viper
 	l.v.SetConfigType("yaml")
-	l.v.SetEnvPrefix("BMAD")
+	l.v.SetEnvPrefix("BMADUUM")
 	l.v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	l.v.AutomaticEnv()
 
 	// Try to find and read config file
-	configPath := os.Getenv("BMAD_CONFIG_PATH")
+	configPath := os.Getenv("BMADUUM_CONFIG_PATH")
 	if configPath != "" {
+		// User explicitly set a config path
 		l.v.SetConfigFile(configPath)
 	} else {
-		// Look for config in current directory
+		// Search for config in multiple locations (in priority order)
 		l.v.SetConfigName("workflows")
+
+		// 1. User config directory (platform-standard location)
+		userConfigDir, err := os.UserConfigDir()
+		if err == nil {
+			appConfigDir := filepath.Join(userConfigDir, "bmaduum")
+			l.v.AddConfigPath(appConfigDir)
+		}
+
+		// 2. Legacy local directories (for backward compatibility)
 		l.v.AddConfigPath("./config")
 		l.v.AddConfigPath(".")
 	}
@@ -80,7 +94,7 @@ func (l *Loader) Load() (*Config, error) {
 	}
 
 	// Override Claude binary path from env if set
-	if binaryPath := os.Getenv("BMAD_CLAUDE_PATH"); binaryPath != "" {
+	if binaryPath := os.Getenv("BMADUUM_CLAUDE_PATH"); binaryPath != "" {
 		cfg.Claude.BinaryPath = binaryPath
 	}
 
@@ -175,4 +189,48 @@ func MustLoad() *Config {
 		panic(fmt.Sprintf("failed to load configuration: %v", err))
 	}
 	return cfg
+}
+
+// ConfigDir returns the platform-specific user configuration directory for bmaduum.
+//
+// The returned path follows platform conventions:
+//   - Linux: ~/.config/bmaduum
+//   - macOS: ~/Library/Application Support/bmaduum
+//   - Windows: %APPDATA%\bmaduum
+//
+// Returns an error if the user config directory cannot be determined.
+func ConfigDir() (string, error) {
+	userConfigDir, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("unable to determine user config directory: %w", err)
+	}
+	return filepath.Join(userConfigDir, "bmaduum"), nil
+}
+
+// DefaultConfigPath returns the full path to the default config file.
+//
+// This is the path where workflows.yaml will be looked for by default
+// (after checking BMAD_CONFIG_PATH environment variable).
+//
+// Returns an error if the user config directory cannot be determined.
+func DefaultConfigPath() (string, error) {
+	configDir, err := ConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(configDir, "workflows.yaml"), nil
+}
+
+// EnsureConfigDir ensures the user configuration directory exists.
+//
+// If the directory does not exist, it will be created with appropriate
+// permissions (0755). If the directory already exists, this is a no-op.
+//
+// Returns an error if the directory cannot be created.
+func EnsureConfigDir() error {
+	configDir, err := ConfigDir()
+	if err != nil {
+		return err
+	}
+	return os.MkdirAll(configDir, 0755)
 }

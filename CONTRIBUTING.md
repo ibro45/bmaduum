@@ -1,11 +1,11 @@
-# Contributing to bmad-automate
+# Contributing to bmaduum
 
-Thank you for your interest in contributing to bmad-automate! This document provides guidelines and information for contributors.
+Thank you for your interest in contributing to bmaduum! This document provides guidelines and information for contributors.
 
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/yourusername/bmad-automate.git`
+2. Clone your fork: `git clone https://github.com/yourusername/bmaduum.git`
 3. Create a branch for your changes: `git checkout -b feature/your-feature-name`
 4. Make your changes
 5. Run tests: `just check`
@@ -16,9 +16,10 @@ Thank you for your interest in contributing to bmad-automate! This document prov
 
 ### Prerequisites
 
-- Go 1.21 or later
+- Go 1.25 or later
 - [just](https://github.com/casey/just) command runner
 - [golangci-lint](https://golangci-lint.run/) for linting
+- [goreleaser](https://goreleaser.com/) for release builds (optional)
 
 ### Building
 
@@ -75,7 +76,7 @@ just lint
 The codebase follows a layered CLI architecture with dependency injection for testability:
 
 ```
-CLI → Lifecycle → Workflow → Claude
+CLI -> Lifecycle -> Workflow -> Claude
 ```
 
 - **CLI Layer** receives commands and delegates to lifecycle or workflow
@@ -87,20 +88,20 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed diagrams and data 
 
 ## Project Structure
 
-```text
-bmad-automate/
-├── cmd/bmad-automate/     # Application entry point
-├── config/                # Default configuration files
-├── internal/
-│   ├── cli/               # Cobra CLI commands
-│   ├── claude/            # Claude client and JSON parser
-│   ├── config/            # Configuration loading (Viper)
-│   ├── lifecycle/         # Story lifecycle execution
-│   ├── output/            # Terminal output (Lipgloss)
-│   ├── router/            # Status-based workflow routing
-│   ├── state/             # State persistence for resume
-│   ├── status/            # Sprint status file reading/writing
-│   └── workflow/          # Workflow orchestration
+```
+bmaduum/
++-- cmd/bmaduum/     # Application entry point
++-- internal/
+|   +-- claude/            # Claude client and JSON parser
+|   +-- cli/               # Cobra CLI commands
+|   +-- config/            # Configuration loading (Viper)
+|   +-- lifecycle/         # Story lifecycle execution
+|   +-- output/            # Terminal output (Lipgloss)
+|   +-- ratelimit/         # Rate limit detection from stderr
+|   +-- router/            # Status-based workflow routing
+|   +-- state/             # Execution state persistence for resume
+|   +-- status/            # Sprint status file reading/writing
+|   +-- workflow/          # Workflow orchestration
 ```
 
 ### Package Guidelines
@@ -110,6 +111,7 @@ bmad-automate/
 - **config**: Configuration loading and validation
 - **lifecycle**: Full story lifecycle execution from status to done
 - **output**: All terminal output and styling
+- **ratelimit**: Rate limit detection from Claude's stderr output
 - **router**: Status-based workflow routing
 - **state**: State persistence for error recovery and resume
 - **status**: Sprint status file reading and writing

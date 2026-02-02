@@ -44,17 +44,20 @@ go install ./cmd/bmaduum
 ```bash
 # Process a story through its full lifecycle to done
 # (automatically runs: create-story -> dev-story -> code-review -> git-commit)
-bmaduum run PROJ-123
+bmaduum story PROJ-123
 
 # Preview what workflows would run without executing
-bmaduum run --dry-run PROJ-123
+bmaduum story --dry-run PROJ-123
 
 # Process multiple stories through their lifecycles
-bmaduum queue PROJ-123 PROJ-124 PROJ-125
+bmaduum story PROJ-123 PROJ-124 PROJ-125
 
 # Process one or more epics
 bmaduum epic 05
 bmaduum epic 02 04 06
+
+# Process all active epics
+bmaduum epic all
 
 # Run an arbitrary prompt
 bmaduum raw "What files need tests?"
@@ -68,12 +71,11 @@ bmaduum raw "What files need tests?"
 | `dev-story`    | Implement a story                              |
 | `code-review`  | Review code changes                            |
 | `git-commit`   | Commit and push                                |
-| `run`          | Execute full lifecycle to done (with resume)   |
-| `queue`        | Batch process stories through lifecycles       |
-| `epic`         | Process all stories in epic through lifecycles |
+| `story`        | Execute full lifecycle to done (one or more stories) |
+| `epic`         | Process all stories in epic(s) through lifecycles |
 | `raw`          | Execute arbitrary prompt                       |
 
-All lifecycle commands (`run`, `queue`, `epic`) support `--dry-run` to preview execution.
+All lifecycle commands (`story`, `epic`) support `--dry-run` to preview execution.
 
 See [CLI Reference](CLI_REFERENCE.md) for complete details.
 

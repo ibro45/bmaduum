@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"bmad-automate/internal/lifecycle"
-	"bmad-automate/internal/ratelimit"
+	"bmaduum/internal/lifecycle"
+	"bmaduum/internal/ratelimit"
 )
 
 // executeWithRetry executes a story lifecycle with automatic retry on rate limit errors.

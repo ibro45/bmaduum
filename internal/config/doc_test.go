@@ -3,7 +3,7 @@ package config_test
 import (
 	"fmt"
 
-	"bmad-automate/internal/config"
+	"bmaduum/internal/config"
 )
 
 // This example demonstrates loading configuration using DefaultConfig
@@ -15,7 +15,7 @@ func Example_loader() {
 	loader := config.NewLoader()
 
 	// Load attempts to read configuration from:
-	// 1. BMAD_CONFIG_PATH environment variable
+	// 1. BMADUUM_CONFIG_PATH environment variable
 	// 2. ./config/workflows.yaml
 	// 3. Falls back to DefaultConfig() if no file found
 	cfg, err := loader.Load()

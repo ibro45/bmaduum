@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"bmad-automate/internal/state"
+	"bmaduum/internal/state"
 )
 
 // This example demonstrates the Manager interface for state persistence.

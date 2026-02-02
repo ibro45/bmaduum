@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"bmad-automate/internal/claude"
-	"bmad-automate/internal/config"
-	"bmad-automate/internal/output"
+	"bmaduum/internal/claude"
+	"bmaduum/internal/config"
+	"bmaduum/internal/output"
 )
 
 // Runner orchestrates workflow execution using Claude CLI.

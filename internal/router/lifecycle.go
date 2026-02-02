@@ -1,7 +1,7 @@
 package router
 
 import (
-	"bmad-automate/internal/status"
+	"bmaduum/internal/status"
 )
 
 // LifecycleStep represents a single step in the story lifecycle sequence.

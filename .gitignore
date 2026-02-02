@@ -1,5 +1,5 @@
 # Binaries
-/bmad-automate
+/bmaduum
 *.exe
 *.exe~
 *.dll
@@ -37,6 +37,15 @@ go.work.sum
 debug
 *.log
 
+# Local snapshots
+dist/
+
 # Local config overrides
 config/local.yaml
 config/*.local.yaml
+
+# Serena MCP tool data
+.serena/
+
+# Plans
+.plans/

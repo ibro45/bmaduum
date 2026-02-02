@@ -1,4 +1,4 @@
-// Package config provides configuration loading and management for bmad-automate.
+// Package config provides configuration loading and management for bmaduum.
 //
 // Configuration is loaded using Viper, supporting YAML config files and environment
 // variable overrides. The package provides sensible defaults that work out of the
@@ -12,10 +12,15 @@
 //   - [ClaudeConfig] contains Claude CLI binary settings
 //
 // Configuration priority (highest to lowest):
-//  1. Environment variables (BMAD_ prefix)
-//  2. Config file specified by BMAD_CONFIG_PATH
-//  3. ./config/workflows.yaml
-//  4. [DefaultConfig] defaults
+//  1. Environment variables (BMADUUM_ prefix)
+//  2. Config file specified by BMADUUM_CONFIG_PATH
+//  3. User config directory (platform-standard):
+//     - Linux: ~/.config/bmaduum/workflows.yaml
+//     - macOS: ~/Library/Application Support/bmaduum/workflows.yaml
+//     - Windows: %APPDATA%\bmaduum\workflows.yaml
+//  4. ./config/workflows.yaml (legacy fallback)
+//  5. ./workflows.yaml (legacy fallback)
+//  6. [DefaultConfig] defaults
 package config
 
 // Config represents the root configuration structure.
@@ -74,7 +79,7 @@ type ClaudeConfig struct {
 
 	// BinaryPath is the path to the Claude CLI binary.
 	// Default: "claude" (assumes Claude is in PATH).
-	// Can be overridden with BMAD_CLAUDE_PATH environment variable.
+	// Can be overridden with BMADUUM_CLAUDE_PATH environment variable.
 	BinaryPath string `mapstructure:"binary_path"`
 }
 

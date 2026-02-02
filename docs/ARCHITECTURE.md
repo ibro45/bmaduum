@@ -1,14 +1,14 @@
 # Architecture Documentation
 
-Comprehensive architecture documentation for `bmad-automate`.
+Comprehensive architecture documentation for `bmaduum`.
 
 ## System Overview
 
-`bmad-automate` is a Go CLI tool that orchestrates Claude AI to automate development workflows. It spawns Claude as a subprocess, parses streaming JSON output, and displays formatted results.
+`bmaduum` is a Go CLI tool that orchestrates Claude AI to automate development workflows. It spawns Claude as a subprocess, parses streaming JSON output, and displays formatted results.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              bmad-automate                                  │
+│                              bmaduum                                  │
 │                                                                             │
 │  ┌─────────────┐    ┌──────────────┐    ┌─────────────┐    ┌────────────┐  │
 │  │  CLI Layer  │───▶│  Lifecycle   │───▶│   Workflow  │───▶│   Claude   │  │
@@ -47,7 +47,7 @@ Comprehensive architecture documentation for `bmad-automate`.
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                     Entry Point Layer                           │
-│                   cmd/bmad-automate/main.go                     │
+│                   cmd/bmaduum/main.go                     │
 │                       main() → cli.Execute()                    │
 └─────────────────────────────────────────────────────────────────┘
                                   │
@@ -137,7 +137,7 @@ Comprehensive architecture documentation for `bmad-automate`.
 ## Package Dependencies
 
 ```
-cmd/bmad-automate/main.go
+cmd/bmaduum/main.go
          │
          ▼
     internal/cli (Cobra commands)
@@ -171,7 +171,7 @@ cmd/bmad-automate/main.go
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│  User: bmad-automate create-story PROJ-123                               │
+│  User: bmaduum workflow create-story 6-1-setup                     │
 └──────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -179,15 +179,15 @@ cmd/bmad-automate/main.go
 │  1. CLI Layer                                                            │
 │     - Cobra parses command and arguments                                 │
 │     - Routes to create-story command handler                             │
-│     - Handler calls: runner.RunSingle(ctx, "create-story", "PROJ-123")   │
+│     - Handler calls: runner.RunSingle(ctx, "create-story", "6-1-setup")   │
 └──────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
 │  2. Config Layer                                                         │
-│     - config.GetPrompt("create-story", "PROJ-123")                       │
+│     - config.GetPrompt("create-story", "6-1-setup")                       │
 │     - Template: "/bmad:...:create-story - Create story: {{.StoryKey}}"   │
-│     - Expanded: "/bmad:...:create-story - Create story: PROJ-123"        │
+│     - Expanded: "/bmad:...:create-story - Create story: 6-1-setup"        │
 └──────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -227,14 +227,14 @@ cmd/bmad-automate/main.go
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
-│  User: bmad-automate run PROJ-123                                          │
+│  User: bmaduum story 6-1-setup                                       │
 └────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────────┐
 │  1. Status Reader                                                          │
 │     - Read: _bmad-output/implementation-artifacts/sprint-status.yaml       │
-│     - Get status for PROJ-123: "ready-for-dev"                             │
+│     - Get status for 6-1-setup: "ready-for-dev"                           │
 └────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -253,33 +253,32 @@ cmd/bmad-automate/main.go
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────────┐
 │  3. Workflow Execution                                                     │
-│     - runner.RunSingle(ctx, "dev-story", "PROJ-123")                       │
+│     - runner.RunSingle(ctx, "dev-story", "6-1-setup")                      │
 │     - (same flow as single workflow execution)                             │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Queue Processing
+### Story Batch Processing
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
-│  User: bmad-automate queue PROJ-123 PROJ-124 PROJ-125                      │
+│  User: bmaduum story 6-1-setup 6-2-auth 6-3-tests                      │
 └────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────────┐
-│  QueueRunner.RunQueueWithStatus()                                          │
+│  story command processes each story sequentially                           │
 │                                                                            │
 │  for each story:                                                           │
 │    ┌────────────────────────────────────────────────────────────────────┐  │
-│    │  1. Get status from sprint-status.yaml                             │  │
-│    │  2. If "done" → skip                                               │  │
-│    │  3. Route to workflow via router                                   │  │
-│    │  4. Execute workflow                                               │  │
-│    │  5. If exit code != 0 → stop queue                                 │  │
-│    │  6. Record result (success/failure/skipped, duration)              │  │
+│    │  1. Get lifecycle steps for current status                         │  │
+│    │  2. If "done" → skip story                                         │  │
+│    │  3. Execute each workflow in lifecycle                             │  │
+│    │  4. Update status after each workflow                              │  │
+│    │  5. If exit code != 0 → stop processing                            │  │
 │    └────────────────────────────────────────────────────────────────────┘  │
 │                                                                            │
-│  Print summary with all results                                            │
+│  Print completion summary                                                  │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -289,14 +288,14 @@ The lifecycle executor runs stories through their complete workflow sequence fro
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
-│  User: bmad-automate run PROJ-123                                          │
+│  User: bmaduum story 6-1-setup                                       │
 │  (Full lifecycle execution)                                                │
 └────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────────┐
 │  1. Get Current Status                                                     │
-│     - statusReader.GetStoryStatus("PROJ-123") → "backlog"                  │
+│     - statusReader.GetStoryStatus("6-1-setup") → "backlog"                 │
 └────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -350,7 +349,7 @@ The state package enables resume functionality when lifecycle execution fails.
 │  Format: JSON                                                              │
 │                                                                            │
 │  {                                                                         │
-│    "story_key": "PROJ-123",                                                │
+│    "story_key": "6-1-setup",                                               │
 │    "step_index": 2,           // 0-based, step that failed                 │
 │    "total_steps": 4,          // total steps in lifecycle                  │
 │    "start_status": "backlog"  // status when execution began               │
@@ -482,7 +481,7 @@ The state package enables resume functionality when lifecycle execution fails.
 ```
 User          CLI           Config        Runner        Executor       Parser        Printer
  │             │              │             │              │              │             │
- │─run PROJ-123│              │             │              │              │             │
+ │─story 6-1-setup│            │             │              │              │             │
  │             │              │             │              │              │             │
  │             │──GetPrompt()─▶             │              │              │             │
  │             │              │             │              │              │             │
@@ -705,15 +704,15 @@ func (m *Manager) Exists() bool
 │                     Configuration Priority                             │
 │                                                                        │
 │  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │  1. Environment Variables (BMAD_*)                              │   │
-│  │     - BMAD_CONFIG_PATH → custom config file                     │   │
-│  │     - BMAD_CLAUDE_PATH → custom Claude binary                   │   │
+│  │  1. Environment Variables (BMADUUM_*)                              │   │
+│  │     - BMADUUM_CONFIG_PATH → custom config file                     │   │
+│  │     - BMADUUM_CLAUDE_PATH → custom claude command/binary           │   │
 │  └─────────────────────────────────────────────────────────────────┘   │
 │                          │                                             │
 │                          ▼                                             │
 │  ┌─────────────────────────────────────────────────────────────────┐   │
 │  │  2. Config File                                                 │   │
-│  │     - $BMAD_CONFIG_PATH if set                                  │   │
+│  │     - $BMADUUM_CONFIG_PATH if set                                  │   │
 │  │     - OR ./config/workflows.yaml                                │   │
 │  └─────────────────────────────────────────────────────────────────┘   │
 │                          │                                             │

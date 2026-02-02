@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"bmad-automate/internal/router"
-	"bmad-automate/internal/status"
+	"bmaduum/internal/router"
+	"bmaduum/internal/status"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

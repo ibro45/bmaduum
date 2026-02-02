@@ -1,0 +1,172 @@
+# GoReleaser configuration for bmaduum
+# See https://goreleaser.com/customization/ for configuration options
+
+version: 2
+
+project_name: bmaduum
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+      - arm
+    goarm:
+      - "7"
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+      - -X main.builtBy=goreleaser
+    main: ./cmd/bmaduum
+    binary: bmaduum
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    flags:
+      - -trimpath
+
+archives:
+  - format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE*
+      - README.md
+      - CHANGELOG.md
+      - docs/*
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - "^refactor:"
+      - Merge pull request
+      - Merge branch
+
+homebrew_casks:
+  - name: bmaduum
+    homepage: https://github.com/ibro45/bmaduum
+    description: "Automated development workflows powered by Claude CLI"
+    license: MIT
+    repository:
+      owner: ibro45
+      name: homebrew-tap
+    directory: Casks
+    commit_author:
+      name: goreleaser-bot
+      email: bot@goreleaser.com
+    binaries:
+      - bmaduum
+    completions:
+      bash: completions/bmaduum.bash
+      zsh: completions/bmaduum.zsh
+      fish: completions/bmaduum.fish
+
+nix:
+  - name: bmaduum
+    homepage: https://github.com/ibro45/bmaduum
+    description: "Automated development workflows powered by Claude CLI"
+    license: mit
+    repository:
+      owner: ibro45
+      name: nix-pkgs
+    path: pkgs/bmaduum/default.nix
+
+winget:
+  - name: bmaduum
+    homepage: https://github.com/ibro45/bmaduum
+    description: "Automated development workflows powered by Claude CLI"
+    license: MIT
+    publisher: Ibro45
+    publisher_url: https://github.com/ibro45
+    publisher_support_url: https://github.com/ibro45/bmaduum/issues
+    short_description: "Automated development workflows powered by Claude CLI"
+    repository:
+      owner: ibro45
+      name: winget-pkgs
+      branch: "bmaduum-{{.Version}}"
+    commit_author:
+      name: goreleaser-bot
+      email: bot@goreleaser.com
+    package_identifier: Ibro45.bmaduum
+
+scoops:
+  - name: bmaduum
+    homepage: https://github.com/ibro45/bmaduum
+    description: "Automated development workflows powered by Claude CLI"
+    license: MIT
+    repository:
+      owner: ibro45
+      name: scoop-bucket
+    directory: bucket
+    commit_author:
+      name: goreleaser-bot
+      email: bot@goreleaser.com
+
+universal_binaries:
+  - replace: false
+    name_template: "bmaduum"
+
+# signs:
+#   - artifacts: all
+#     args:
+#       - "--batch"
+#       - "--yes"
+#       - "--local-user"
+#       - "{{ .Env.GPG_FINGERPRINT }}"
+#       - "--output"
+#       - "${signature}"
+#       - "--detach-sign"
+#       - "${artifact}"
+
+release:
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## bmaduum {{ .Tag }} ({{ .Date }})
+  footer: |
+    **Full Changelog**: https://github.com/ibro45/bmaduum/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+announce:
+  skip: "{{ .Env.ANNOUNCE_SKIP }}"
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+milestones:
+  - close: true
+    repo:
+      owner: ibro45
+      name: bmaduum
+
+gomod:
+  proxy: true
+
+metadata:
+  mod_timestamp: "{{ .CommitTimestamp }}"

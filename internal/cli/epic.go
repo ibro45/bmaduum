@@ -15,7 +15,7 @@ func newEpicCommand(app *App) *cobra.Command {
 	var autoRetry bool
 
 	cmd := &cobra.Command{
-		Use:   "epic <epic-id> [epic-id...]",
+		Use:   "epic <epic-id>|all [epic-id...]",
 		Short: "Run full lifecycle for all stories in one or more epics",
 		Long: `Run the complete lifecycle for all stories in one or more epics to completion.
 
@@ -35,13 +35,31 @@ Status is updated in sprint-status.yaml after each successful workflow.
 Use --dry-run to preview workflows without executing them.
 Use --auto-retry to automatically retry on rate limit errors.
 
-Example:
+Examples:
   bmaduum epic 6
-  bmaduum epic 2 4 6`,
+  bmaduum epic 2 4 6
+  bmaduum epic all`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			epicIDs := args
+
+			var epicIDs []string
+			if args[0] == "all" {
+				// Special case: "all" means all active epics
+				allEpics, err := app.StatusReader.GetAllEpics()
+				if err != nil {
+					cmd.SilenceUsage = true
+					fmt.Printf("Error reading epics: %v\n", err)
+					return NewExitError(1)
+				}
+				if len(allEpics) == 0 {
+					fmt.Println("No active epics found")
+					return nil
+				}
+				epicIDs = allEpics
+			} else {
+				epicIDs = args
+			}
 
 			// Create lifecycle executor with app dependencies
 			executor := lifecycle.NewExecutor(app.Runner, app.StatusReader, app.StatusWriter)

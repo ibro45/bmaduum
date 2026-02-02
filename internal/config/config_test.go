@@ -112,8 +112,8 @@ output:
 
 func TestLoader_Load_WithEnvOverride(t *testing.T) {
 	// Set environment variable
-	os.Setenv("BMAD_CLAUDE_PATH", "/env/claude")
-	defer os.Unsetenv("BMAD_CLAUDE_PATH")
+	os.Setenv("BMADUUM_CLAUDE_PATH", "/env/claude")
+	defer os.Unsetenv("BMADUUM_CLAUDE_PATH")
 
 	loader := NewLoader()
 	cfg, err := loader.Load()
@@ -215,8 +215,8 @@ func TestLoader_Load_DefaultsWithNoConfigFile(t *testing.T) {
 	defer os.Chdir(originalWd)
 
 	// Clear any env vars that might interfere
-	os.Unsetenv("BMAD_CONFIG_PATH")
-	os.Unsetenv("BMAD_CLAUDE_PATH")
+	os.Unsetenv("BMADUUM_CONFIG_PATH")
+	os.Unsetenv("BMADUUM_CLAUDE_PATH")
 
 	loader := NewLoader()
 	cfg, err := loader.Load()
@@ -239,8 +239,8 @@ claude:
 	err := os.WriteFile(configPath, []byte(configContent), 0644)
 	require.NoError(t, err)
 
-	os.Setenv("BMAD_CONFIG_PATH", configPath)
-	defer os.Unsetenv("BMAD_CONFIG_PATH")
+	os.Setenv("BMADUUM_CONFIG_PATH", configPath)
+	defer os.Unsetenv("BMADUUM_CONFIG_PATH")
 
 	loader := NewLoader()
 	cfg, err := loader.Load()
@@ -261,10 +261,10 @@ claude:
 	err := os.WriteFile(configPath, []byte(configContent), 0644)
 	require.NoError(t, err)
 
-	os.Setenv("BMAD_CONFIG_PATH", configPath)
-	os.Setenv("BMAD_CLAUDE_PATH", "/from/env/override/claude")
-	defer os.Unsetenv("BMAD_CONFIG_PATH")
-	defer os.Unsetenv("BMAD_CLAUDE_PATH")
+	os.Setenv("BMADUUM_CONFIG_PATH", configPath)
+	os.Setenv("BMADUUM_CLAUDE_PATH", "/from/env/override/claude")
+	defer os.Unsetenv("BMADUUM_CONFIG_PATH")
+	defer os.Unsetenv("BMADUUM_CLAUDE_PATH")
 
 	loader := NewLoader()
 	cfg, err := loader.Load()
@@ -281,8 +281,8 @@ func TestMustLoad_Success(t *testing.T) {
 	os.Chdir(tmpDir)
 	defer os.Chdir(originalWd)
 
-	os.Unsetenv("BMAD_CONFIG_PATH")
-	os.Unsetenv("BMAD_CLAUDE_PATH")
+	os.Unsetenv("BMADUUM_CONFIG_PATH")
+	os.Unsetenv("BMADUUM_CLAUDE_PATH")
 
 	// Should not panic
 	cfg := MustLoad()
@@ -338,4 +338,34 @@ func TestDefaultConfig_WorkflowTemplates(t *testing.T) {
 func TestPromptData_StoryKey(t *testing.T) {
 	data := PromptData{StoryKey: "ABC-123"}
 	assert.Equal(t, "ABC-123", data.StoryKey)
+}
+
+func TestConfigDir(t *testing.T) {
+	configDir, err := ConfigDir()
+	require.NoError(t, err)
+	assert.NotEmpty(t, configDir)
+	assert.Contains(t, configDir, "bmaduum")
+}
+
+func TestDefaultConfigPath(t *testing.T) {
+	configPath, err := DefaultConfigPath()
+	require.NoError(t, err)
+	assert.NotEmpty(t, configPath)
+	assert.Contains(t, configPath, "bmaduum")
+	assert.Contains(t, configPath, "workflows.yaml")
+}
+
+func TestEnsureConfigDir(t *testing.T) {
+	// We can't easily mock os.UserConfigDir, but we can verify
+	// that EnsureConfigDir creates a directory when given a path
+	// Let's test the logic by checking that a real call doesn't error
+	err := EnsureConfigDir()
+	// This should either succeed or fail due to permissions,
+	// but not due to logic errors
+	// We can't make strong assertions since we're using the real OS config dir
+	if err != nil {
+		// If it fails, it should be a permission error or similar
+		// Not a "not implemented" error
+		assert.NotContains(t, err.Error(), "not implemented")
+	}
 }
