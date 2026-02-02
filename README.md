@@ -2,21 +2,40 @@
 
 A CLI tool for automating [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) development workflows with Claude AI.
 
-## Overview
+[![Go Version](https://img.shields.io/badge/go-1.21+-blue.svg)](https://golang.org/doc/go1.21)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/yourusername/bmad-automate)](https://goreportcard.com/report/github.com/yourusername/bmad-automate)
 
-`bmad-automate` orchestrates Claude to run [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) development workflows including story creation, implementation, code review, and git operations. It's designed to automate repetitive development tasks by delegating them to Claude with predefined prompts.
+**bmad-automate** orchestrates Claude AI to automate development workflows—creating stories, implementing features, reviewing code, and managing git operations based on your project's sprint status.
 
-## Features
+## Table of Contents
 
-- **Workflow Automation** - Run predefined workflows (create-story, dev-story, code-review, git-commit)
-- **Status-Based Routing** - Automatically determines next workflow based on story status
-- **Full Lifecycle Execution** - Run a story from current status to completion with a single command
-- **Epic Processing** - Process all stories in an epic in order
-- **Queue Processing** - Process multiple stories in batch
-- **Dry Run Mode** - Preview workflows without executing them
-- **Configurable Prompts** - Customize workflow prompts via YAML configuration
-- **Streaming Output** - Real-time feedback from Claude's execution
-- **Styled Terminal Output** - Clean, readable output with progress indicators
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [Usage](#usage)
+- [⚠️ Security Warning](#️-security-warning)
+- [How It Works](#how-it-works)
+- [Configuration](#configuration)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Quick Start
+
+```bash
+# Install
+go install ./cmd/bmad-automate
+
+# Run a story through its full lifecycle
+bmad-automate run 6-1-setup-project
+
+# Preview what would run (dry-run)
+bmad-automate run 6-1-setup-project --dry-run
+
+# Process entire epic
+bmad-automate epic 6
+```
 
 ## Installation
 
@@ -146,6 +165,13 @@ Run an arbitrary prompt:
 bmad-automate raw "List all Go files in the project"
 ```
 
+### Global Flags
+
+| Flag           | Description                                           | Available On                     |
+|----------------|-------------------------------------------------------|----------------------------------|
+| `--dry-run`    | Preview workflows without executing them              | `run`, `queue`, `epic`, `all-epics` |
+| `--auto-retry` | Automatically retry on failures (up to 10 times)        | `run`, `queue`, `epic`, `all-epics` |
+
 ### Help
 
 ```bash
@@ -153,11 +179,72 @@ bmad-automate --help
 bmad-automate <command> --help
 ```
 
+## ⚠️ Security Warning
+
+This tool uses `--dangerously-skip-permissions` when invoking Claude CLI, which means:
+- **No permission prompts** for file reads/writes
+- **No confirmation** before command execution
+- **Full automation** without user intervention
+
+Only use in:
+- ✅ Trusted repositories
+- ✅ Isolated development environments
+- ✅ CI/CD pipelines with restricted permissions
+
+Do not use with:
+- 🚫 Untrusted codebases
+- 🚫 Production systems without safeguards
+
+## How It Works
+
+bmad-automate spawns Claude CLI as a subprocess and manages execution through streaming JSON:
+
+1. **Command** → Parses story key and determines workflow from sprint-status.yaml
+2. **Prompt** → Expands Go template with story key (e.g., `"{{.StoryKey}}"` → `"6-1-setup"`)
+3. **Execute** → Spawns `claude --dangerously-skip-permissions --output-format stream-json -p <prompt>`
+4. **Parse** → Reads streaming JSON events (text, tool use, tool results)
+5. **Display** → Formats output with progress indicators and styling
+6. **Update** → On success, updates status in sprint-status.yaml
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Command   │────▶│   Router    │────▶│   Claude    │
+│  run 6-1-*  │     │Status→Workflow│    │ Subprocess  │
+└─────────────┘     └─────────────┘     └──────┬──────┘
+                                                │
+                       ┌────────────────────────┘
+                       ▼
+                ┌─────────────┐
+                │    JSON     │
+                │   Parser    │
+                └──────┬──────┘
+                       │
+                       ▼
+                ┌─────────────┐
+                │   Styled    │
+                │   Output    │
+                └─────────────┘
+```
+
 ## Configuration
+
+### Configuration Precedence
+
+Configuration is loaded in this priority order (highest wins):
+
+1. **Environment variables** (`BMAD_*`)
+2. **Config file** (specified by `BMAD_CONFIG_PATH`, or defaults to `./config/workflows.yaml`)
+3. **Built-in defaults** (works out of the box without any config file)
 
 ### Config File
 
-Create a `config/workflows.yaml` file to customize workflow prompts:
+The config file is **optional**. If not found, sensible defaults are used.
+
+To customize, create a file at one of these locations:
+- `./config/workflows.yaml` (default, relative to working directory)
+- A custom path specified via `BMAD_CONFIG_PATH` environment variable
+
+Example config file:
 
 ```yaml
 workflows:
@@ -189,12 +276,35 @@ output:
   truncate_length: 60
 ```
 
+#### What Each Section Controls
+
+| Section | Purpose | Effect |
+|---------|---------|--------|
+| `workflows` | Defines prompts sent to Claude | Each workflow's `prompt_template` is expanded with the story key and passed to Claude CLI when that workflow runs. Customize to change how Claude behaves. |
+| `full_cycle.steps` | Defines execution order | Controls which workflows run (and in what order) for `run`, `queue`, `epic`, and `all-epics` commands. |
+| `claude.binary_path` | Claude CLI location | Path to the `claude` executable. Use this if Claude is not in your PATH or you want a specific version. |
+| `claude.output_format` | Claude output format | Should be `stream-json` (required for parsing). Do not change unless you know what you're doing. |
+| `output.truncate_lines` | Output display limit | Maximum number of lines to show per tool output. Additional lines are hidden with "... (N more lines)". |
+| `output.truncate_length` | Line length limit | Maximum characters per line before truncation with "...". |
+
 ### Environment Variables
 
-| Variable           | Description                | Default                   |
-| ------------------ | -------------------------- | ------------------------- |
-| `BMAD_CONFIG_PATH` | Path to custom config file | `./config/workflows.yaml` |
-| `BMAD_CLAUDE_PATH` | Path to Claude binary      | `claude`                  |
+| Variable                     | Description                     | Default                   |
+| ---------------------------- | ------------------------------- | ------------------------- |
+| `BMAD_CONFIG_PATH`           | Path to custom config file      | `./config/workflows.yaml` |
+| `BMAD_CLAUDE_PATH`           | Path to Claude binary           | `claude`                  |
+| `BMAD_CLAUDE_BINARY_PATH`    | Claude binary location          | `claude`                  |
+| `BMAD_CLAUDE_OUTPUT_FORMAT`  | Output format (stream-json)     | `stream-json`             |
+| `BMAD_OUTPUT_TRUNCATE_LINES` | Max lines to display per event  | `20`                      |
+| `BMAD_OUTPUT_TRUNCATE_LENGTH`| Max characters per output line  | `60`                      |
+
+Any configuration field can be set via environment variables using the `BMAD_` prefix with underscore-separated nested keys. For example, `BMAD_OUTPUT_TRUNCATE_LINES` overrides `output.truncate_lines`.
+
+**Example: Using a custom config file location**
+```bash
+export BMAD_CONFIG_PATH=~/my-configs/bmad-workflows.yaml
+bmad-automate run 6-1-setup
+```
 
 ### Sprint Status File
 
@@ -222,6 +332,38 @@ Valid status values:
 | `in-progress`   | Story currently being implemented |
 | `review`        | Story in code review              |
 | `done`          | Story complete                    |
+
+### Prompt Templates
+
+Workflow prompts use Go's `text/template` syntax. The available variable is:
+
+- `{{.StoryKey}}` - The story identifier (e.g., `6-1-setup`)
+
+Example: `"Work on story: {{.StoryKey}}"` expands to `"Work on story: 6-1-setup"`
+
+### Important: Hardcoded Paths
+
+The sprint status file path is **not configurable**. It must be located at:
+
+```
+_bmad-output/implementation-artifacts/sprint-status.yaml
+```
+
+Run `bmad-automate` from your project root where this file exists.
+
+## Troubleshooting
+
+### "story not found" error
+Ensure `_bmad-output/implementation-artifacts/sprint-status.yaml` exists and contains the story key under `development_status:`.
+
+### Claude not found
+If Claude CLI is not in your PATH, set the full path:
+```bash
+export BMAD_CLAUDE_PATH=/opt/homebrew/bin/claude
+```
+
+### Rate limiting
+Use `--auto-retry` flag to automatically retry on rate limit errors with exponential backoff.
 
 ## Development
 
