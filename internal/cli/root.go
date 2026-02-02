@@ -30,6 +30,7 @@ import (
 	"bmad-automate/internal/claude"
 	"bmad-automate/internal/config"
 	"bmad-automate/internal/output"
+	"bmad-automate/internal/sprint"
 	"bmad-automate/internal/status"
 	"bmad-automate/internal/workflow"
 )
@@ -120,7 +121,7 @@ type App struct {
 // This constructor initializes:
 //   - A [claude.Executor] configured from cfg.Claude settings
 //   - A [workflow.Runner] for workflow execution
-//   - A [status.Reader] and [status.Writer] for sprint status management
+//   - A [sprint.StoryStatusManager] for story-file-based status management
 //   - An [output.Printer] for terminal output
 //
 // For testing, construct [App] directly with mock dependencies instead.
@@ -137,16 +138,17 @@ func NewApp(cfg *config.Config) *App {
 	})
 
 	runner := workflow.NewRunner(executor, printer, cfg)
-	statusReader := status.NewReader("")
-	statusWriter := status.NewWriter("")
+
+	// Use StoryStatusManager for story-file-based status management
+	storyStatusManager := sprint.NewStoryStatusManager("", "")
 
 	return &App{
 		Config:       cfg,
 		Executor:     executor,
 		Printer:      printer,
 		Runner:       runner,
-		StatusReader: statusReader,
-		StatusWriter: statusWriter,
+		StatusReader: storyStatusManager,
+		StatusWriter: storyStatusManager,
 	}
 }
 
@@ -156,6 +158,7 @@ func NewApp(cfg *config.Config) *App {
 //   - run: Execute full story lifecycle from current status to done
 //   - queue: Run lifecycle for multiple stories sequentially
 //   - epic: Run all stories in an epic
+//   - sprint: Manage sprint status (rebuild cache)
 //   - raw: Execute a raw prompt directly
 //   - create-story: Create a new story from backlog status
 //   - dev-story: Develop a story (ready-for-dev or in-progress status)
@@ -181,6 +184,7 @@ story creation, development, code review, and git operations.`,
 		newQueueCommand(app),
 		newEpicCommand(app),
 		newAllEpicsCommand(app),
+		newSprintCommand(app),
 		newRawCommand(app),
 		newVersionCommand(),
 	)
