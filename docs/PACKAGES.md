@@ -10,11 +10,17 @@ Complete API reference for all internal packages in `bmaduum`.
 | [claude](#claude)       | `internal/claude/`    | Claude CLI execution and JSON parsing              |
 | [config](#config)       | `internal/config/`    | Configuration loading and template expansion       |
 | [output](#output)       | `internal/output/`    | Terminal formatting and styling                    |
+| output/core             | `internal/output/core/` | Core types (Printer interface, StepResult)       |
+| output/diff             | `internal/output/diff/` | Unified diff parsing and rendering               |
+| output/progress         | `internal/output/progress/` | Progress bar and status line                 |
+| output/render           | `internal/output/render/` | Specialized renderers (tool, session, box)     |
+| output/terminal         | `internal/output/terminal/` | ANSI terminal control                        |
 | [workflow](#workflow)   | `internal/workflow/`  | Workflow orchestration                             |
 | [lifecycle](#lifecycle) | `internal/lifecycle/` | Story lifecycle orchestration                      |
 | [state](#state)         | `internal/state/`     | Lifecycle state persistence for resume             |
 | [status](#status)       | `internal/status/`    | Sprint status file reading                         |
 | [router](#router)       | `internal/router/`    | Workflow routing based on status                   |
+| [ratelimit](#ratelimit) | `internal/ratelimit/` | Rate limit detection from Claude stderr            |
 
 ---
 
@@ -585,6 +591,18 @@ func MustLoad() *Config
 **Package:** `internal/output`
 
 Terminal output formatting using Lipgloss.
+
+### Subpackages
+
+The output package has been modularized into specialized subpackages:
+
+| Subpackage | Purpose |
+|------------|---------|
+| `core` | Core types: Printer interface, StepResult, StoryResult, ToolParams |
+| `diff` | Unified diff parsing and rich terminal rendering |
+| `progress` | Real-time progress line with spinner, activity timer, tokens |
+| `render` | Specialized renderers for tools, sessions, cycles, boxes |
+| `terminal` | Low-level ANSI terminal control, TTY detection, cursor management |
 
 ### Types
 

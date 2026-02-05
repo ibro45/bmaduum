@@ -1,9 +1,11 @@
 package claude
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewEventFromStream_SystemInit(t *testing.T) {
@@ -163,16 +165,21 @@ func TestEvent_IsToolResult(t *testing.T) {
 	}{
 		{
 			name:     "tool result with stdout",
-			event:    Event{Type: EventTypeUser, ToolStdout: "output"},
+			event:    Event{Type: EventTypeUser, ToolStdout: "output", HasToolResult: true},
 			expected: true,
 		},
 		{
 			name:     "tool result with stderr",
-			event:    Event{Type: EventTypeUser, ToolStderr: "error"},
+			event:    Event{Type: EventTypeUser, ToolStderr: "error", HasToolResult: true},
 			expected: true,
 		},
 		{
-			name:     "empty result",
+			name:     "tool result with empty content",
+			event:    Event{Type: EventTypeUser, HasToolResult: true},
+			expected: true,
+		},
+		{
+			name:     "user event without tool result",
 			event:    Event{Type: EventTypeUser},
 			expected: false,
 		},
@@ -188,4 +195,190 @@ func TestEvent_IsToolResult(t *testing.T) {
 			assert.Equal(t, tt.expected, tt.event.IsToolResult())
 		})
 	}
+}
+
+func TestContentBlock_UnmarshalJSON_RawInput(t *testing.T) {
+	// Test that raw JSON is captured for unknown tools
+	jsonData := `{
+		"type": "tool_use",
+		"name": "UnknownTool",
+		"input": {
+			"foo": "bar",
+			"count": 42,
+			"nested": {"key": "value"}
+		}
+	}`
+
+	var block ContentBlock
+	err := json.Unmarshal([]byte(jsonData), &block)
+	require.NoError(t, err)
+
+	assert.Equal(t, "tool_use", block.Type)
+	assert.Equal(t, "UnknownTool", block.Name)
+	assert.NotNil(t, block.InputRaw)
+
+	// Verify raw JSON can be unmarshaled
+	var rawParams map[string]interface{}
+	err = json.Unmarshal(block.InputRaw, &rawParams)
+	require.NoError(t, err)
+	assert.Equal(t, "bar", rawParams["foo"])
+	assert.Equal(t, float64(42), rawParams["count"])
+}
+
+func TestContentBlock_UnmarshalJSON_KnownFields(t *testing.T) {
+	// Test that known fields are still parsed into ToolInput
+	jsonData := `{
+		"type": "tool_use",
+		"name": "Bash",
+		"input": {
+			"command": "ls -la",
+			"description": "List files"
+		}
+	}`
+
+	var block ContentBlock
+	err := json.Unmarshal([]byte(jsonData), &block)
+	require.NoError(t, err)
+
+	assert.Equal(t, "Bash", block.Name)
+	assert.NotNil(t, block.Input)
+	assert.Equal(t, "ls -la", block.Input.Command)
+	assert.Equal(t, "List files", block.Input.Description)
+}
+
+func TestNewEventFromStream_TaskTool(t *testing.T) {
+	raw := &StreamEvent{
+		Type: "assistant",
+		Message: &MessageContent{
+			Content: []ContentBlock{
+				{
+					Type: "tool_use",
+					Name: "Task",
+					Input: &ToolInput{
+						SubagentType: "Explore",
+						Prompt:       "Find all configuration files",
+					},
+				},
+			},
+		},
+	}
+
+	event := NewEventFromStream(raw)
+
+	assert.Equal(t, "Task", event.ToolName)
+	assert.Equal(t, "Explore", event.ToolSubagentType)
+	assert.Equal(t, "Find all configuration files", event.ToolPrompt)
+}
+
+func TestNewEventFromStream_WriteTool(t *testing.T) {
+	raw := &StreamEvent{
+		Type: "assistant",
+		Message: &MessageContent{
+			Content: []ContentBlock{
+				{
+					Type: "tool_use",
+					Name: "Write",
+					Input: &ToolInput{
+						FilePath: "/path/to/file.go",
+						Content:  "package main\n\nfunc main() {}",
+					},
+				},
+			},
+		},
+	}
+
+	event := NewEventFromStream(raw)
+
+	assert.Equal(t, "Write", event.ToolName)
+	assert.Equal(t, "/path/to/file.go", event.ToolFilePath)
+	assert.Equal(t, "package main\n\nfunc main() {}", event.ToolContent)
+}
+
+func TestNewEventFromStream_NotebookEditTool(t *testing.T) {
+	raw := &StreamEvent{
+		Type: "assistant",
+		Message: &MessageContent{
+			Content: []ContentBlock{
+				{
+					Type: "tool_use",
+					Name: "NotebookEdit",
+					Input: &ToolInput{
+						NotebookPath: "/path/to/notebook.ipynb",
+						CellID:       "cell-123",
+						NewSource:    "print('hello')",
+						EditMode:     "replace",
+						CellType:     "code",
+					},
+				},
+			},
+		},
+	}
+
+	event := NewEventFromStream(raw)
+
+	assert.Equal(t, "NotebookEdit", event.ToolName)
+	assert.Equal(t, "/path/to/notebook.ipynb", event.ToolNotebookPath)
+	assert.Equal(t, "cell-123", event.ToolCellID)
+	assert.Equal(t, "print('hello')", event.ToolNewSource)
+	assert.Equal(t, "replace", event.ToolEditMode)
+	assert.Equal(t, "code", event.ToolCellType)
+}
+
+func TestNewEventFromStream_AskUserQuestionTool(t *testing.T) {
+	raw := &StreamEvent{
+		Type: "assistant",
+		Message: &MessageContent{
+			Content: []ContentBlock{
+				{
+					Type: "tool_use",
+					Name: "AskUserQuestion",
+					Input: &ToolInput{
+						Questions: []Question{
+							{
+								Question: "Which library?",
+								Header:   "Library",
+								Options: []QuestionOption{
+									{Label: "React", Description: "Facebook's library"},
+									{Label: "Vue", Description: "Progressive framework"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	event := NewEventFromStream(raw)
+
+	assert.Equal(t, "AskUserQuestion", event.ToolName)
+	require.Len(t, event.ToolQuestions, 1)
+	assert.Equal(t, "Which library?", event.ToolQuestions[0].Question)
+	assert.Equal(t, "Library", event.ToolQuestions[0].Header)
+	require.Len(t, event.ToolQuestions[0].Options, 2)
+	assert.Equal(t, "React", event.ToolQuestions[0].Options[0].Label)
+}
+
+func TestNewEventFromStream_SkillTool(t *testing.T) {
+	raw := &StreamEvent{
+		Type: "assistant",
+		Message: &MessageContent{
+			Content: []ContentBlock{
+				{
+					Type: "tool_use",
+					Name: "Skill",
+					Input: &ToolInput{
+						Skill: "commit",
+						Args:  "-m 'Fix bug'",
+					},
+				},
+			},
+		},
+	}
+
+	event := NewEventFromStream(raw)
+
+	assert.Equal(t, "Skill", event.ToolName)
+	assert.Equal(t, "commit", event.ToolSkill)
+	assert.Equal(t, "-m 'Fix bug'", event.ToolArgs)
 }

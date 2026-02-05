@@ -70,10 +70,15 @@ Examples:
 			}
 
 			// Process each epic
-			for i, epicID := range epicIDs {
-				fmt.Printf("═══════════════════════════════════════════════════════════════════\n")
-				fmt.Printf("  Epic %d of %d: %s\n", i+1, len(epicIDs), epicID)
-				fmt.Printf("═══════════════════════════════════════════════════════════════════\n\n")
+			for epicIdx, epicID := range epicIDs {
+				// Set operation context for progress display
+				if len(epicIDs) == 1 && epicIDs[0] == "all" {
+					app.Runner.SetOperation("Epic all")
+				} else if len(epicIDs) > 1 {
+					app.Runner.SetOperation(fmt.Sprintf("Epic %d of %d: %s", epicIdx+1, len(epicIDs), epicID))
+				} else {
+					app.Runner.SetOperation(fmt.Sprintf("Epic %s", epicID))
+				}
 
 				// Get all stories for this epic
 				storyKeys, err := app.StatusReader.GetEpicStories(epicID)
@@ -84,7 +89,12 @@ Examples:
 				}
 
 				// Execute full lifecycle for each story in order
-				for _, storyKey := range storyKeys {
+				for storyIdx, storyKey := range storyKeys {
+					// Update operation to show story progress within epic
+					if len(storyKeys) > 1 {
+						app.Runner.SetOperation(fmt.Sprintf("Epic %s: Story %d of %d", epicID, storyIdx+1, len(storyKeys)))
+					}
+
 					err := executeWithRetry(ctx, executor, storyKey, autoRetry, 10, func(stepIndex, totalSteps int, workflow string) {
 						app.Printer.StepStart(stepIndex, totalSteps, workflow)
 					})
@@ -103,9 +113,7 @@ Examples:
 				fmt.Printf("Epic %s completed (%d stories processed)\n\n", epicID, len(storyKeys))
 			}
 
-			fmt.Printf("═══════════════════════════════════════════════════════════════════\n")
-			fmt.Printf("  All %d epic(s) completed successfully!\n", len(epicIDs))
-			fmt.Printf("═══════════════════════════════════════════════════════════════════\n")
+			fmt.Printf("✓ All %d epic(s) completed successfully!\n", len(epicIDs))
 
 			return nil
 		},

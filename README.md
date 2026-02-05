@@ -11,6 +11,7 @@ A CLI tool for automating [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-ME
 
 - [Quick Start](#quick-start)
 - [Installation](#installation)
+- [Uninstallation](#uninstallation)
 - [Usage](#usage)
 - [Security Warning](#security-warning)
 - [How It Works](#how-it-works)
@@ -56,7 +57,7 @@ bmaduum epic all
 ### From Source
 
 ```bash
-git clone https://github.com/yourusername/bmaduum.git
+git clone https://github.com/ibro45/bmaduum.git
 cd bmaduum
 go install ./cmd/bmaduum
 ```
@@ -81,6 +82,43 @@ Release builds with version information are available via GoReleaser:
 ```bash
 just release-snapshot  # Local snapshot build
 just release           # Full release (requires git tag)
+```
+
+## Uninstallation
+
+### Installed via `go install`
+
+Remove the binary from your Go bin directory:
+
+```bash
+# Default location
+rm "$(go env GOPATH)/bin/bmaduum"
+
+# Or if using $HOME/go
+rm "$HOME/go/bin/bmaduum"
+
+# Or find where it is
+which bmaduum  # Then remove that path
+```
+
+### Installed from prebuilt binary
+
+Remove the binary from wherever you installed it:
+
+```bash
+# If installed to /usr/local/bin
+sudo rm /usr/local/bin/bmaduum
+
+# If installed to ~/.local/bin
+rm ~/.local/bin/bmaduum
+```
+
+### Docker
+
+Remove the Docker image:
+
+```bash
+docker rmi ghcr.io/ibro45/bmaduum:latest
 ```
 
 ## Usage
@@ -434,6 +472,11 @@ bmaduum/
 |   +-- config/            # Configuration loading (Viper)
 |   +-- lifecycle/         # Story lifecycle execution
 |   +-- output/            # Terminal output formatting
+|   |   +-- core/          # Core types (Printer interface)
+|   |   +-- diff/          # Unified diff parsing and rendering
+|   |   +-- progress/      # Progress bar and status line
+|   |   +-- render/        # Specialized renderers (tool, session, etc.)
+|   |   +-- terminal/      # ANSI terminal control
 |   +-- ratelimit/         # Rate limit detection
 |   +-- router/            # Status-based workflow routing
 |   +-- state/             # Execution state persistence

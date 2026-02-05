@@ -148,23 +148,46 @@ func TestRunner_HandleEvent(t *testing.T) {
 
 	buf.Reset()
 
-	// Test tool use
+	// Test tool use with result - tool uses are buffered until their results arrive
+	// to enable printing tool+result pairs together (matching Claude Code style)
 	runner.handleEvent(claude.Event{
 		Type:            claude.EventTypeAssistant,
+		ToolID:          "tool-123",
 		ToolName:        "Bash",
 		ToolCommand:     "ls",
 		ToolDescription: "List files",
 	})
-	assert.Contains(t, buf.String(), "Bash")
+	// Tool use is buffered, not printed yet
+	assert.NotContains(t, buf.String(), "Bash")
 
-	buf.Reset()
-
-	// Test tool result
+	// When result arrives, both tool use and result are printed together
 	runner.handleEvent(claude.Event{
-		Type:       claude.EventTypeUser,
-		ToolStdout: "file1.go",
+		Type:          claude.EventTypeUser,
+		ToolUseID:     "tool-123",
+		ToolStdout:    "file1.go",
+		HasToolResult: true,
 	})
+	assert.Contains(t, buf.String(), "Bash")
 	assert.Contains(t, buf.String(), "file1.go")
+}
+
+func TestRunner_HandleEvent_ToolUseFlushedOnText(t *testing.T) {
+	runner, _, buf := setupTestRunner()
+
+	// Tool use is buffered
+	runner.handleEvent(claude.Event{
+		Type:            claude.EventTypeAssistant,
+		ToolID:          "tool-123",
+		ToolName:        "Bash",
+		ToolCommand:     "ls",
+		ToolDescription: "List files",
+	})
+	assert.NotContains(t, buf.String(), "Bash")
+
+	// When text arrives, buffered tools are flushed first
+	runner.handleEvent(claude.Event{Type: claude.EventTypeAssistant, Text: "Done!"})
+	assert.Contains(t, buf.String(), "Bash")
+	assert.Contains(t, buf.String(), "Done!")
 }
 
 func TestStepResult_IsSuccess(t *testing.T) {

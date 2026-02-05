@@ -29,6 +29,7 @@ import (
 	"bmaduum/internal/claude"
 	"bmaduum/internal/config"
 	"bmaduum/internal/output"
+	"bmaduum/internal/output/core"
 	"bmaduum/internal/status"
 	"bmaduum/internal/workflow"
 )
@@ -43,6 +44,7 @@ import (
 //   - RunSingle executes a named workflow (e.g., "create-story", "dev-story")
 //     with a story key for template expansion
 //   - RunRaw executes a raw prompt directly without workflow lookup
+//   - SetOperation sets the operation context for progress display
 type WorkflowRunner interface {
 	// RunSingle executes the named workflow for the given story key.
 	// Returns 0 on success, non-zero on failure.
@@ -51,6 +53,10 @@ type WorkflowRunner interface {
 	// RunRaw executes a raw prompt directly without workflow lookup.
 	// Returns 0 on success, non-zero on failure.
 	RunRaw(ctx context.Context, prompt string) int
+
+	// SetOperation sets the operation context for display in the status bar.
+	// This shows the broader context (e.g., "Epic 6", "Story 2 of 3").
+	SetOperation(operation string)
 }
 
 // StatusReader is the interface for reading story status from sprint-status.yaml.
@@ -102,7 +108,7 @@ type App struct {
 	Executor claude.Executor
 
 	// Printer formats and displays output to the terminal.
-	Printer output.Printer
+	Printer core.Printer
 
 	// Runner executes named workflows or raw prompts.
 	Runner WorkflowRunner
@@ -120,7 +126,7 @@ type App struct {
 //   - A [claude.Executor] configured from cfg.Claude settings
 //   - A [workflow.Runner] for workflow execution
 //   - A [status.Reader] and [status.Writer] for sprint status management
-//   - An [output.Printer] for terminal output
+//   - A [core.Printer] for terminal output
 //
 // For testing, construct [App] directly with mock dependencies instead.
 func NewApp(cfg *config.Config) *App {

@@ -68,8 +68,8 @@ Comprehensive architecture documentation for `bmaduum`.
 │  │   - StateManager   *state.Manager                         │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                                                                 │
-│  Commands: create-story, dev-story, code-review, git-commit,    │
-│            run, queue, epic, raw                                │
+│  Commands: story, epic, workflow (create-story, dev-story,      │
+│            code-review, git-commit), raw, version               │
 └─────────────────────────────────────────────────────────────────┘
                                   │
                                   ▼

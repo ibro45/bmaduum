@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"bmaduum/internal/output"
+	"bmaduum/internal/output/core"
 )
 
 // Example_printer demonstrates the Printer interface methods for terminal output.
@@ -48,7 +49,7 @@ func Example_styles() {
 	printer.Text("Processing your request...")
 
 	// Tool usage shows Claude's tool invocations
-	printer.ToolUse("Bash", "List files", "ls -la", "")
+	printer.ToolUse(core.ToolParams{Name: "Bash", Description: "List files", Command: "ls -la"})
 
 	// Check output was captured
 	if buf.Len() > 0 {
@@ -116,7 +117,7 @@ func Example_commandOutput() {
 // Example_stepResult demonstrates the StepResult type for cycle summaries.
 func Example_stepResult() {
 	// StepResult tracks individual workflow step execution
-	step := output.StepResult{
+	step := core.StepResult{
 		Name:     "create-story",
 		Duration: 2 * time.Second,
 		Success:  true,
@@ -134,7 +135,7 @@ func Example_stepResult() {
 // Example_storyResult demonstrates the StoryResult type for queue summaries.
 func Example_storyResult() {
 	// StoryResult tracks individual story processing in queue/epic operations
-	result := output.StoryResult{
+	result := core.StoryResult{
 		Key:      "7-1-define-schema",
 		Success:  true,
 		Duration: 30 * time.Second,
@@ -156,7 +157,7 @@ func Example_cycleSummary() {
 	var buf bytes.Buffer
 	printer := output.NewPrinterWithWriter(&buf)
 
-	steps := []output.StepResult{
+	steps := []core.StepResult{
 		{Name: "create-story", Duration: 2 * time.Second, Success: true},
 		{Name: "dev-story", Duration: 10 * time.Second, Success: true},
 		{Name: "code-review", Duration: 5 * time.Second, Success: true},

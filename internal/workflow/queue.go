@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"bmaduum/internal/output"
+	"bmaduum/internal/output/core"
 	"bmaduum/internal/router"
 	"bmaduum/internal/status"
 )
@@ -58,7 +58,7 @@ func NewQueueRunner(runner *Runner) *QueueRunner {
 // code from the first failed story.
 func (q *QueueRunner) RunQueueWithStatus(ctx context.Context, storyKeys []string, statusReader StatusReader) int {
 	queueStart := time.Now()
-	results := make([]output.StoryResult, 0, len(storyKeys))
+	results := make([]core.StoryResult, 0, len(storyKeys))
 
 	q.runner.printer.QueueHeader(len(storyKeys), storyKeys)
 
@@ -71,7 +71,7 @@ func (q *QueueRunner) RunQueueWithStatus(ctx context.Context, storyKeys []string
 		storyStatus, err := statusReader.GetStoryStatus(storyKey)
 		if err != nil {
 			fmt.Printf("  Error: %v\n", err)
-			result := output.StoryResult{
+			result := core.StoryResult{
 				Key:      storyKey,
 				Success:  false,
 				Duration: time.Since(storyStart),
@@ -88,7 +88,7 @@ func (q *QueueRunner) RunQueueWithStatus(ctx context.Context, storyKeys []string
 			if errors.Is(err, router.ErrStoryComplete) {
 				// Done stories are skipped, not failures
 				fmt.Printf("  ↷ Skipped (already done)\n")
-				result := output.StoryResult{
+				result := core.StoryResult{
 					Key:      storyKey,
 					Success:  true,
 					Duration: time.Since(storyStart),
@@ -103,7 +103,7 @@ func (q *QueueRunner) RunQueueWithStatus(ctx context.Context, storyKeys []string
 			} else {
 				fmt.Printf("  Error: %v\n", err)
 			}
-			result := output.StoryResult{
+			result := core.StoryResult{
 				Key:      storyKey,
 				Success:  false,
 				Duration: time.Since(storyStart),
@@ -118,7 +118,7 @@ func (q *QueueRunner) RunQueueWithStatus(ctx context.Context, storyKeys []string
 		exitCode := q.runner.RunSingle(ctx, workflowName, storyKey)
 		duration := time.Since(storyStart)
 
-		result := output.StoryResult{
+		result := core.StoryResult{
 			Key:      storyKey,
 			Success:  exitCode == 0,
 			Duration: duration,

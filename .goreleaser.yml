@@ -68,34 +68,34 @@ changelog:
       - Merge pull request
       - Merge branch
 
-homebrew_casks:
-  - name: bmaduum
-    homepage: https://github.com/ibro45/bmaduum
-    description: "Automated development workflows powered by Claude CLI"
-    license: MIT
-    repository:
-      owner: ibro45
-      name: homebrew-tap
-    directory: Casks
-    commit_author:
-      name: goreleaser-bot
-      email: bot@goreleaser.com
-    binaries:
-      - bmaduum
-    completions:
-      bash: completions/bmaduum.bash
-      zsh: completions/bmaduum.zsh
-      fish: completions/bmaduum.fish
+# homebrew_casks:
+#   - name: bmaduum
+#     homepage: https://github.com/ibro45/bmaduum
+#     description: "Automated development workflows powered by Claude CLI"
+#     license: MIT
+#     repository:
+#       owner: ibro45
+#       name: homebrew-tap
+#     directory: Casks
+#     commit_author:
+#       name: goreleaser-bot
+#       email: bot@goreleaser.com
+#     binaries:
+#       - bmaduum
+#     completions:
+#       bash: completions/bmaduum.bash
+#       zsh: completions/bmaduum.zsh
+#       fish: completions/bmaduum.fish
 
-nix:
-  - name: bmaduum
-    homepage: https://github.com/ibro45/bmaduum
-    description: "Automated development workflows powered by Claude CLI"
-    license: mit
-    repository:
-      owner: ibro45
-      name: nix-pkgs
-    path: pkgs/bmaduum/default.nix
+# nix:
+#   - name: bmaduum
+#     homepage: https://github.com/ibro45/bmaduum
+#     description: "Automated development workflows powered by Claude CLI"
+#     license: mit
+#     repository:
+#       owner: ibro45
+#       name: nix-pkgs
+#     path: pkgs/bmaduum/default.nix
 
 winget:
   - name: bmaduum
@@ -115,18 +115,18 @@ winget:
       email: bot@goreleaser.com
     package_identifier: Ibro45.bmaduum
 
-scoops:
-  - name: bmaduum
-    homepage: https://github.com/ibro45/bmaduum
-    description: "Automated development workflows powered by Claude CLI"
-    license: MIT
-    repository:
-      owner: ibro45
-      name: scoop-bucket
-    directory: bucket
-    commit_author:
-      name: goreleaser-bot
-      email: bot@goreleaser.com
+# scoops:
+#   - name: bmaduum
+#     homepage: https://github.com/ibro45/bmaduum
+#     description: "Automated development workflows powered by Claude CLI"
+#     license: MIT
+#     repository:
+#       owner: ibro45
+#       name: scoop-bucket
+#     directory: bucket
+#     commit_author:
+#       name: goreleaser-bot
+#       email: bot@goreleaser.com
 
 universal_binaries:
   - replace: false

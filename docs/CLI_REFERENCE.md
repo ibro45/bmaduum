@@ -32,7 +32,7 @@ Run full lifecycle for one or more stories from their current status to done.
 **Usage:**
 
 ```bash
-bmaduum story [--dry-run] [--auto-retry] [--tui] <story-key> [story-key...]
+bmaduum story [--dry-run] [--auto-retry] <story-key> [story-key...]
 ```
 
 **Arguments:**
@@ -45,7 +45,6 @@ bmaduum story [--dry-run] [--auto-retry] [--tui] <story-key> [story-key...]
 |------|-------------|
 | `--dry-run` | Preview workflow sequence without execution |
 | `--auto-retry` | Automatically retry on rate limit errors |
-| `--tui` | Enable interactive TUI mode (single story only) |
 
 **Examples:**
 
@@ -58,9 +57,6 @@ bmaduum story 6-1-setup 6-2-auth 6-3-tests
 
 # Preview what would run
 bmaduum story --dry-run 6-1-setup 6-2-auth
-
-# Enable TUI mode
-bmaduum story --tui 6-1-setup
 ```
 
 **Behavior:**

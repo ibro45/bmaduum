@@ -3,41 +3,57 @@ package workflow
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"bmaduum/internal/claude"
 	"bmaduum/internal/config"
-	"bmaduum/internal/output"
+	"bmaduum/internal/output/core"
+	"bmaduum/internal/output/progress"
+	"bmaduum/internal/ratelimit"
 )
 
 // Runner orchestrates workflow execution using Claude CLI.
 //
 // Runner is the primary executor for development workflows. It combines a
-// [claude.Executor] for spawning Claude processes, an [output.Printer] for
+// [claude.Executor] for spawning Claude processes, a [core.Printer] for
 // formatted terminal output, and a [config.Config] for prompt templates.
 //
 // Use [NewRunner] to create a properly initialized Runner instance.
 type Runner struct {
-	executor claude.Executor
-	printer  output.Printer
-	config   *config.Config
+	executor   claude.Executor
+	printer    core.Printer
+	progress   *progress.Line
+	config     *config.Config
+	detector   *ratelimit.Detector
+	correlator *ToolCorrelator // Correlates tool uses with their results
 }
 
 // NewRunner creates a new workflow runner with the specified dependencies.
 //
 // Parameters:
 //   - executor: The [claude.Executor] implementation for running Claude CLI
-//   - printer: The [output.Printer] for formatted terminal output
+//   - printer: The [core.Printer] for formatted terminal output
 //   - cfg: The configuration containing workflow prompt templates
 //
 // The executor typically uses [claude.NewExecutor] in production or
 // [claude.MockExecutor] for testing.
-func NewRunner(executor claude.Executor, printer output.Printer, cfg *config.Config) *Runner {
+func NewRunner(executor claude.Executor, printer core.Printer, cfg *config.Config) *Runner {
 	return &Runner{
-		executor: executor,
-		printer:  printer,
-		config:   cfg,
+		executor:   executor,
+		printer:    printer,
+		progress:   progress.NewLine(os.Stdout),
+		config:     cfg,
+		detector:   ratelimit.NewDetector(),
+		correlator: NewToolCorrelator(),
 	}
+}
+
+// SetOperation sets the operation context for display in the status bar.
+// This is typically called by CLI commands to show the broader context
+// (e.g., "Epic 6", "Story 2/3").
+func (r *Runner) SetOperation(operation string) {
+	r.progress.SetOperation(operation)
 }
 
 // RunSingle executes a single named workflow for a story.
@@ -99,18 +115,25 @@ func (r *Runner) RunFullCycle(ctx context.Context, storyKey string) int {
 		steps = append(steps, Step{Name: name, Prompt: prompt, Model: model})
 	}
 
+	// Initialize progress line FIRST (sets up scroll region at bottom)
+	// This must happen before any output so content flows naturally
+	r.progress.Init()
+
 	r.printer.CycleHeader(storyKey)
 
-	results := make([]output.StepResult, len(steps))
+	results := make([]core.StepResult, len(steps))
 
 	for i, step := range steps {
 		r.printer.StepStart(i+1, len(steps), step.Name)
 
 		stepStart := time.Now()
-		exitCode := r.runClaude(ctx, step.Prompt, fmt.Sprintf("%s: %s", step.Name, storyKey), step.Model)
+
+		// Run the step with progress tracking
+		exitCode := r.runStepWithProgress(ctx, step, storyKey, i+1, len(steps))
+
 		duration := time.Since(stepStart)
 
-		results[i] = output.StepResult{
+		results[i] = core.StepResult{
 			Name:     step.Name,
 			Duration: duration,
 			Success:  exitCode == 0,
@@ -118,6 +141,7 @@ func (r *Runner) RunFullCycle(ctx context.Context, storyKey string) int {
 
 		if exitCode != 0 {
 			r.printer.CycleFailed(storyKey, step.Name, time.Since(totalStart))
+			r.progress.Clear() // Clear progress on failure
 			return exitCode
 		}
 
@@ -128,18 +152,129 @@ func (r *Runner) RunFullCycle(ctx context.Context, storyKey string) int {
 	return 0
 }
 
+// runStepWithProgress runs a single step with progress line tracking.
+func (r *Runner) runStepWithProgress(ctx context.Context, step Step, storyKey string, stepNum, totalSteps int) int {
+	// Reset correlator for new step
+	r.correlator.Reset()
+
+	startTime := time.Now()
+
+	// Update progress bar for this step
+	r.progress.SetStepInfo(stepNum, totalSteps, step.Name, storyKey, step.Model)
+
+	// Event handler
+	handler := func(event claude.Event) {
+		// Track token usage - estimate from text if actual counts are 0
+		if event.InputTokens > 0 || event.OutputTokens > 0 {
+			r.progress.AddTokens(event.InputTokens, event.OutputTokens)
+		} else if event.IsText() && len(event.Text) > 0 {
+			// Estimate tokens: roughly 4 characters per token for English text
+			// This is a rough approximation since Claude CLI doesn't provide streaming token counts
+			estimatedTokens := (len(event.Text) + 3) / 4
+			r.progress.AddTokens(0, estimatedTokens)
+		}
+
+		// Record first response for thinking time calculation
+		if event.IsText() || event.IsToolUse() {
+			r.progress.RecordFirstResponse()
+		}
+
+		// Update progress based on event type
+		switch {
+		case event.IsToolUse():
+			r.progress.SetCurrentTool(event.ToolName)
+			r.progress.IncrementToolCount()
+		case event.IsToolResult():
+			r.progress.SetCurrentTool("") // Back to thinking
+		}
+
+		// Print the event
+		r.handleEvent(event)
+
+		// Check for rate limit in stderr after printing
+		if event.IsToolResult() && event.ToolStderr != "" {
+			info := r.detector.CheckLine(event.ToolStderr)
+			if info.IsRateLimit {
+				wait := r.detector.WaitTime(info)
+				r.progress.UpdateWithRateLimit(stepNum, totalSteps, step.Name, storyKey, time.Since(startTime), info.ResetTime)
+				time.Sleep(wait)
+				r.progress.SetCurrentTool("")
+			}
+		}
+	}
+
+	exitCode, err := r.executor.ExecuteWithResult(ctx, step.Prompt, handler, step.Model)
+	if err != nil {
+		fmt.Printf("Error executing claude: %v\n", err)
+		exitCode = 1
+	}
+
+	duration := time.Since(startTime)
+	r.progress.Done(exitCode == 0, duration)
+
+	return exitCode
+}
+
 // runClaude executes Claude CLI with the given prompt and handles streaming output.
 //
 // This is the core execution method used by all public Runner methods.
 // It displays a command header, streams events to the printer via handleEvent,
-// and displays a footer with timing and exit status.
+// updates the progress line, and displays a footer with timing and exit status.
 func (r *Runner) runClaude(ctx context.Context, prompt, label, model string) int {
+	// Reset correlator for new execution
+	r.correlator.Reset()
+
+	// Initialize progress line FIRST (sets up scroll region at bottom)
+	// This must happen before any output so content flows naturally
+	r.progress.Init()
+
+	// Set initial step info
+	r.progress.SetStepInfo(0, 0, label, "", model)
+
+	// Now print header (it will scroll within the scroll region)
 	r.printer.CommandHeader(label, prompt, r.config.Output.TruncateLength)
 
 	startTime := time.Now()
 
+	// Event handler that routes events and updates progress
 	handler := func(event claude.Event) {
+		// Track token usage - estimate from text if actual counts are 0
+		if event.InputTokens > 0 || event.OutputTokens > 0 {
+			r.progress.AddTokens(event.InputTokens, event.OutputTokens)
+		} else if event.IsText() && len(event.Text) > 0 {
+			// Estimate tokens: roughly 4 characters per token for English text
+			// This is a rough approximation since Claude CLI doesn't provide streaming token counts
+			estimatedTokens := (len(event.Text) + 3) / 4
+			r.progress.AddTokens(0, estimatedTokens)
+		}
+
+		// Record first response for thinking time calculation
+		if event.IsText() || event.IsToolUse() {
+			r.progress.RecordFirstResponse()
+		}
+
+		// Update progress based on event type
+		switch {
+		case event.IsToolUse():
+			r.progress.SetCurrentTool(event.ToolName)
+			r.progress.IncrementToolCount()
+		case event.IsToolResult():
+			r.progress.SetCurrentTool("") // Back to thinking
+		}
+
+		// Print the event (output scrolls below status bar)
 		r.handleEvent(event)
+
+		// Check for rate limit in stderr after printing
+		if event.IsToolResult() && event.ToolStderr != "" {
+			info := r.detector.CheckLine(event.ToolStderr)
+			if info.IsRateLimit {
+				wait := r.detector.WaitTime(info)
+				r.progress.UpdateWithRateLimit(0, 0, label, "", time.Since(startTime), info.ResetTime)
+				time.Sleep(wait)
+				r.progress.SetCurrentTool("")
+			}
+		}
 	}
 
 	exitCode, err := r.executor.ExecuteWithResult(ctx, prompt, handler, model)
@@ -149,31 +284,51 @@ func (r *Runner) runClaude(ctx context.Context, prompt, label, model string) int
 	}
 
 	duration := time.Since(startTime)
+	r.progress.Done(exitCode == 0, duration)
 	r.printer.CommandFooter(duration, exitCode == 0, exitCode)
 
 	return exitCode
 }
 
 // handleEvent routes a Claude streaming event to the appropriate printer method.
-//
-// Events are dispatched based on their type: session start/end, text output,
-// tool usage, and tool results. Each event type is formatted differently
-// by the printer for terminal display.
+// Tool uses are buffered and correlated with their results to print them together,
+// matching Claude Code's display behavior.
 func (r *Runner) handleEvent(event claude.Event) {
 	switch {
 	case event.SessionStarted:
 		r.printer.SessionStart()
 
 	case event.IsText():
+		// Flush any pending tools before printing text
+		r.flushPendingTools()
 		r.printer.Text(event.Text)
 
 	case event.IsToolUse():
-		r.printer.ToolUse(event.ToolName, event.ToolDescription, event.ToolCommand, event.ToolFilePath)
+		// Buffer tool use for correlation with its result
+		params := EventToToolParams(event)
+		r.correlator.AddToolUse(event.ToolID, params)
 
 	case event.IsToolResult():
-		r.printer.ToolResult(event.ToolStdout, event.ToolStderr, r.config.Output.TruncateLines)
+		// Match result with pending tool use and print together
+		if params, found := r.correlator.MatchResult(event.ToolUseID); found {
+			r.printer.ToolUse(params)
+			r.printer.ToolResult(event.ToolStdout, event.ToolStderr, r.config.Output.TruncateLines)
+		} else {
+			// No matching tool use found, just print the result
+			r.printer.ToolResult(event.ToolStdout, event.ToolStderr, r.config.Output.TruncateLines)
+		}
 
 	case event.SessionComplete:
-		r.printer.SessionEnd(0, true) // Duration handled elsewhere
+		// Flush any remaining pending tools
+		r.flushPendingTools()
+		r.printer.SessionEnd(0, true)
+	}
+}
+
+// flushPendingTools prints any buffered tool uses without waiting for results.
+// This is called when text arrives or the session ends.
+func (r *Runner) flushPendingTools() {
+	for _, tool := range r.correlator.Flush() {
+		r.printer.ToolUse(tool.Params)
 	}
 }

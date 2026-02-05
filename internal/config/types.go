@@ -96,6 +96,32 @@ type OutputConfig struct {
 	// Longer lines are truncated with "..." suffix.
 	// Default: 60
 	TruncateLength int `mapstructure:"truncate_length"`
+
+	// Markdown contains markdown rendering configuration.
+	Markdown MarkdownConfig `mapstructure:"markdown"`
+}
+
+// MarkdownConfig contains configuration for markdown rendering in terminal output.
+//
+// When enabled, Claude's text output is rendered with proper formatting:
+// bold, italic, headers, code blocks with syntax highlighting, lists, etc.
+type MarkdownConfig struct {
+	// Enabled controls whether markdown rendering is active.
+	// Default: true
+	Enabled bool `mapstructure:"enabled"`
+
+	// Style is the glamour theme to use: "dark", "light", "dracula", "tokyo-night".
+	// Avoid "auto" as it can cause detection delays on some terminals.
+	// Default: "dark"
+	Style string `mapstructure:"style"`
+
+	// WordWrap is the column width for text wrapping.
+	// Default: 100
+	WordWrap int `mapstructure:"word_wrap"`
+
+	// Emoji enables emoji shortcode rendering (e.g., :smile: -> 😄).
+	// Default: true
+	Emoji bool `mapstructure:"emoji"`
 }
 
 // DefaultConfig returns a new [Config] with sensible defaults.
@@ -130,6 +156,12 @@ func DefaultConfig() *Config {
 		Output: OutputConfig{
 			TruncateLines:  20,
 			TruncateLength: 60,
+			Markdown: MarkdownConfig{
+				Enabled:  true,
+				Style:    "dark",
+				WordWrap: 100,
+				Emoji:    true,
+			},
 		},
 	}
 }

@@ -216,7 +216,7 @@ func TestSubcommand_Help(t *testing.T) {
 		name    string
 		command string
 	}{
-			{"workflow create-story help", "workflow"},
+		{"workflow create-story help", "workflow"},
 		{"workflow dev-story help", "workflow"},
 		{"workflow code-review help", "workflow"},
 		{"workflow git-commit help", "workflow"},

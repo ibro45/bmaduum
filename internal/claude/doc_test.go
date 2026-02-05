@@ -87,8 +87,9 @@ func Example_eventTypeChecking() {
 
 	// Tool result event
 	resultEvent := claude.Event{
-		Type:       claude.EventTypeUser,
-		ToolStdout: "file1.go\nfile2.go",
+		Type:          claude.EventTypeUser,
+		ToolStdout:    "file1.go\nfile2.go",
+		HasToolResult: true,
 	}
 	fmt.Println("result event IsToolResult:", resultEvent.IsToolResult())
 	// Output:

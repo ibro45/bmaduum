@@ -398,8 +398,8 @@ func TestEpicCommand_All(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:              "epic all with no active epics returns success",
-			statusYAML:        `development_status:
+			name: "epic all with no active epics returns success",
+			statusYAML: `development_status:
   6-1-first: done`,
 			expectedWorkflows: nil,
 			expectedStatuses:  nil,

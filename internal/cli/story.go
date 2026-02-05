@@ -52,9 +52,13 @@ Examples:
 
 			// Execute full lifecycle for each story in order
 			for i, storyKey := range storyKeys {
-				// Show story progress for multiple stories
+				// Set operation context for progress display
 				if len(storyKeys) > 1 {
+					app.Runner.SetOperation(fmt.Sprintf("Story %d of %d: %s", i+1, len(storyKeys), storyKey))
+					// Show story progress for multiple stories
 					fmt.Printf("─── Story %d of %d: %s\n", i+1, len(storyKeys), storyKey)
+				} else {
+					app.Runner.SetOperation(fmt.Sprintf("Story %s", storyKey))
 				}
 
 				err := executeWithRetry(ctx, executor, storyKey, autoRetry, 10, func(stepIndex, totalSteps int, workflow string) {

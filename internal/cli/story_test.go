@@ -63,9 +63,9 @@ func TestStoryCommand_SingleStory(t *testing.T) {
 			expectError:       false,
 		},
 		{
-			name:          "story failure stops execution",
-			storyKey:      "STORY-1",
-			statusYAML:    `development_status:
+			name:     "story failure stops execution",
+			storyKey: "STORY-1",
+			statusYAML: `development_status:
   STORY-1: backlog`,
 			failOnWorkflow: "dev-story",
 			expectedWorkflows: []string{
@@ -235,8 +235,8 @@ func TestStoryCommand_MultipleStories(t *testing.T) {
 // TestStoryCommand_DryRun tests dry-run mode for story command
 func TestStoryCommand_DryRun(t *testing.T) {
 	tests := []struct {
-		name      string
-		storyKeys []string
+		name       string
+		storyKeys  []string
 		statusYAML string
 	}{
 		{

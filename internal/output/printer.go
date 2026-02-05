@@ -1,344 +1,471 @@
+// Package output provides terminal output formatting using lipgloss styles.
+//
+// The package provides structured output for CLI operations including session
+// lifecycle, step progress, tool usage display, and batch operation summaries.
+// All output is styled using the lipgloss library for consistent terminal rendering.
+//
+// Key types:
+//   - [DefaultPrinter] - Production implementation using lipgloss styles
+//
+// The core types (Printer, StepResult, StoryResult, ToolParams) are in the
+// core sub-package. Use [NewPrinter] for production output to stdout, or
+// [NewPrinterWithWriter] to capture output in tests.
 package output
 
 import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
+
+	"bmaduum/internal/output/core"
+	"bmaduum/internal/output/diff"
+	"bmaduum/internal/output/render"
 )
 
-// StepResult represents the result of a single workflow step execution.
+// DefaultPrinter implements [core.Printer] with lipgloss terminal styling.
 //
-// It captures the step name, execution duration, and success/failure status
-// for display in cycle summaries.
-type StepResult struct {
-	// Name is the step identifier (e.g., "create-story", "dev-story").
-	Name string
-	// Duration is how long the step took to execute.
-	Duration time.Duration
-	// Success indicates whether the step completed successfully.
-	Success bool
-}
-
-// StoryResult represents the result of processing a story in queue or epic operations.
-//
-// It tracks the outcome of each story in a batch operation, including whether
-// it was skipped (already done), completed successfully, or failed.
-type StoryResult struct {
-	// Key is the story identifier (e.g., "7-1-define-schema").
-	Key string
-	// Success indicates whether the story completed all lifecycle steps.
-	Success bool
-	// Duration is how long the story processing took.
-	Duration time.Duration
-	// FailedAt contains the step name where processing failed, if any.
-	FailedAt string
-	// Skipped indicates the story was skipped because it was already done.
-	Skipped bool
-}
-
-// Printer defines the interface for structured terminal output operations.
-//
-// The interface enables output capture in tests via [NewPrinterWithWriter],
-// which accepts a custom io.Writer instead of writing to stdout.
-//
-// Methods are grouped by operation type: session lifecycle, step progress,
-// tool usage display, content output, cycle summaries, and queue summaries.
-type Printer interface {
-	// SessionStart prints an indicator that a new execution session has begun.
-	SessionStart()
-	// SessionEnd prints completion status for the session with total duration.
-	SessionEnd(duration time.Duration, success bool)
-
-	// StepStart prints a numbered step header (e.g., "[1/4] create-story").
-	StepStart(step, total int, name string)
-	// StepEnd prints step completion status with duration.
-	StepEnd(duration time.Duration, success bool)
-
-	// ToolUse displays Claude tool invocation details including name,
-	// description, command, and file path as applicable.
-	ToolUse(name, description, command, filePath string)
-	// ToolResult displays tool execution output, optionally truncating
-	// stdout to the specified number of lines.
-	ToolResult(stdout, stderr string, truncateLines int)
-
-	// Text displays plain text content from Claude.
-	Text(message string)
-	// Divider prints a visual separator line between sections.
-	Divider()
-
-	// CycleHeader prints the header for a full lifecycle cycle operation.
-	CycleHeader(storyKey string)
-	// CycleSummary prints the completion summary showing all steps and durations.
-	CycleSummary(storyKey string, steps []StepResult, totalDuration time.Duration)
-	// CycleFailed prints failure information when a cycle fails at a step.
-	CycleFailed(storyKey string, failedStep string, duration time.Duration)
-
-	// QueueHeader prints the header for a batch queue operation.
-	QueueHeader(count int, stories []string)
-	// QueueStoryStart prints the header when starting a story in a queue.
-	QueueStoryStart(index, total int, storyKey string)
-	// QueueSummary prints the batch results summary showing completed,
-	// skipped, failed, and remaining stories.
-	QueueSummary(results []StoryResult, allKeys []string, totalDuration time.Duration)
-
-	// CommandHeader prints the header before running a workflow command.
-	CommandHeader(label, prompt string, truncateLength int)
-	// CommandFooter prints the footer after a command completes with
-	// duration, success status, and exit code.
-	CommandFooter(duration time.Duration, success bool, exitCode int)
-}
-
-// DefaultPrinter implements [Printer] with lipgloss terminal styling.
-//
-// It is the production implementation used for CLI output. The styles
-// are defined in styles.go and provide consistent color and formatting
-// across all output operations.
+// It composites the specialized renderers from the render package:
+//   - SessionRenderer for session lifecycle
+//   - ToolRenderer for tool invocations
+//   - CycleRenderer for cycle and queue operations
 type DefaultPrinter struct {
-	out io.Writer
+	out           io.Writer
+	session       *render.SessionRenderer
+	tool          *render.ToolRenderer
+	cycle         *render.CycleRenderer
+	styleProvider *defaultStyleProvider
+	widthProvider *defaultWidthProvider
+	markdown      *MarkdownRenderer
 }
 
 // NewPrinter creates a new [DefaultPrinter] that writes to stdout.
-//
-// This is the standard constructor for production CLI output.
 func NewPrinter() *DefaultPrinter {
-	return &DefaultPrinter{out: os.Stdout}
+	return NewPrinterWithWriter(os.Stdout)
 }
 
 // NewPrinterWithWriter creates a new [DefaultPrinter] with a custom writer.
-//
-// This constructor enables output capture in tests by providing a bytes.Buffer
-// or other io.Writer implementation instead of stdout.
+// This is useful for tests to capture output.
 func NewPrinterWithWriter(w io.Writer) *DefaultPrinter {
-	return &DefaultPrinter{out: w}
+	return NewPrinterWithConfig(w, DefaultMarkdownConfig())
 }
 
-func (p *DefaultPrinter) writeln(format string, args ...interface{}) {
-	fmt.Fprintf(p.out, format+"\n", args...)
+// NewPrinterWithConfig creates a new [DefaultPrinter] with custom markdown configuration.
+func NewPrinterWithConfig(w io.Writer, cfg MarkdownConfig) *DefaultPrinter {
+	styleProvider := newDefaultStyleProvider()
+	widthProvider := newDefaultWidthProvider()
+	markdown := NewMarkdownRendererWithConfig(cfg)
+
+	// Create the tool diff adapter
+	diffAdapter := newToolDiffAdapter()
+
+	// Create the printer first with minimal fields
+	p := &DefaultPrinter{
+		out:           w,
+		styleProvider: styleProvider,
+		widthProvider: widthProvider,
+		markdown:      markdown,
+	}
+
+	// Now create the renderers with the printer reference
+	session := render.NewSessionRenderer(w, styleProvider, widthProvider, markdown.Render)
+	tool := render.NewToolRenderer(w, styleProvider, diffAdapter, markdown.Render)
+	cycle := render.NewCycleRenderer(&outputWriterAdapter{printer: p}, styleProvider, widthProvider)
+
+	// Assign the renderers to the printer
+	p.session = session
+	p.tool = tool
+	p.cycle = cycle
+
+	return p
 }
 
 // SessionStart prints session start indicator.
 func (p *DefaultPrinter) SessionStart() {
-	p.writeln("%s Session started\n", iconInProgress)
+	p.session.SessionStart()
 }
 
 // SessionEnd prints session end with status.
 func (p *DefaultPrinter) SessionEnd(duration time.Duration, success bool) {
-	p.writeln("%s Session complete", iconInProgress)
+	p.session.SessionEnd(duration, success)
 }
 
 // StepStart prints step start header.
 func (p *DefaultPrinter) StepStart(step, total int, name string) {
-	header := fmt.Sprintf("[%d/%d] %s", step, total, name)
-	p.writeln(stepHeaderStyle.Render(header))
+	// No output - step info is in CommandHeader and ProgressLine
 }
 
 // StepEnd prints step completion status.
 func (p *DefaultPrinter) StepEnd(duration time.Duration, success bool) {
-	// Step end is usually handled by CommandFooter
+	// Handled by CommandFooter and ProgressLine
 }
 
 // ToolUse prints tool invocation details.
-func (p *DefaultPrinter) ToolUse(name, description, command, filePath string) {
-	p.writeln("%s Tool: %s", iconTool, toolNameStyle.Render(name))
-
-	if description != "" {
-		p.writeln("%s  %s", iconToolLine, description)
+func (p *DefaultPrinter) ToolUse(params core.ToolParams) {
+	// Convert core.ToolParams to render.ToolParams
+	renderParams := render.ToolParams{
+		Name:         params.Name,
+		Description:  params.Description,
+		Command:      params.Command,
+		FilePath:     params.FilePath,
+		OldString:    params.OldString,
+		NewString:    params.NewString,
+		Pattern:      params.Pattern,
+		Query:        params.Query,
+		URL:          params.URL,
+		Path:         params.Path,
+		Content:      params.Content,
+		InputRaw:     params.InputRaw,
+		SubagentType: params.SubagentType,
+		Prompt:       params.Prompt,
+		NotebookPath: params.NotebookPath,
+		CellID:       params.CellID,
+		NewSource:    params.NewSource,
+		EditMode:     params.EditMode,
+		CellType:     params.CellType,
+		Questions:    params.Questions,
+		Skill:        params.Skill,
+		Args:         params.Args,
+		Todos:        params.Todos,
 	}
-	if command != "" {
-		p.writeln("%s  $ %s", iconToolLine, command)
-	}
-	if filePath != "" {
-		p.writeln("%s  File: %s", iconToolLine, filePath)
-	}
-
-	p.writeln(iconToolEnd)
+	p.tool.ToolUse(renderParams)
 }
 
 // ToolResult prints tool execution results.
 func (p *DefaultPrinter) ToolResult(stdout, stderr string, truncateLines int) {
-	if stdout != "" {
-		output := truncateOutput(stdout, truncateLines)
-		// Indent each line
-		indented := "   " + strings.ReplaceAll(output, "\n", "\n   ")
-		p.writeln("%s\n", indented)
-	}
-	if stderr != "" {
-		p.writeln("   %s\n", mutedStyle.Render("[stderr] "+stderr))
-	}
+	p.tool.ToolResult(stdout, stderr, truncateLines)
 }
 
 // Text prints a text message from Claude.
 func (p *DefaultPrinter) Text(message string) {
-	if message != "" {
-		p.writeln("Claude: %s\n", message)
-	}
+	p.session.Text(message)
 }
 
 // Divider prints a visual divider.
 func (p *DefaultPrinter) Divider() {
-	p.writeln(dividerStyle.Render(strings.Repeat("═", 65)))
+	p.session.Divider()
 }
 
 // CycleHeader prints the header for a full cycle run.
 func (p *DefaultPrinter) CycleHeader(storyKey string) {
-	p.writeln("")
-	content := fmt.Sprintf("BMAD Full Cycle: %s\nSteps: create-story → dev-story → code-review → git-commit", storyKey)
-	p.writeln(headerStyle.Render(content))
-	p.writeln("")
+	p.cycle.CycleHeader(storyKey)
 }
 
 // CycleSummary prints the summary after a successful cycle.
-func (p *DefaultPrinter) CycleSummary(storyKey string, steps []StepResult, totalDuration time.Duration) {
-	var sb strings.Builder
-
-	sb.WriteString(successStyle.Render(iconSuccess+" CYCLE COMPLETE") + "\n")
-	sb.WriteString(fmt.Sprintf("Story: %s\n", storyKey))
-	sb.WriteString(strings.Repeat("─", 50) + "\n")
-
-	for i, step := range steps {
-		sb.WriteString(fmt.Sprintf("[%d] %-15s %s\n", i+1, step.Name, step.Duration.Round(time.Millisecond)))
+func (p *DefaultPrinter) CycleSummary(storyKey string, steps []core.StepResult, totalDuration time.Duration) {
+	// Convert core.StepResult to render.StepResult
+	renderSteps := make([]render.StepResult, len(steps))
+	for i, s := range steps {
+		renderSteps[i] = render.StepResult{
+			Name:     s.Name,
+			Duration: s.Duration,
+			Success:  s.Success,
+		}
 	}
-
-	sb.WriteString(strings.Repeat("─", 50) + "\n")
-	sb.WriteString(fmt.Sprintf("Total: %s", totalDuration.Round(time.Millisecond)))
-
-	p.writeln(summaryStyle.Render(sb.String()))
+	p.cycle.CycleSummary(storyKey, renderSteps, totalDuration)
 }
 
 // CycleFailed prints failure information when a cycle fails.
 func (p *DefaultPrinter) CycleFailed(storyKey string, failedStep string, duration time.Duration) {
-	var sb strings.Builder
-
-	sb.WriteString(errorStyle.Render(iconError+" CYCLE FAILED") + "\n")
-	sb.WriteString(fmt.Sprintf("Story: %s\n", storyKey))
-	sb.WriteString(fmt.Sprintf("Failed at: %s\n", failedStep))
-	sb.WriteString(fmt.Sprintf("Duration: %s", duration.Round(time.Millisecond)))
-
-	p.writeln(summaryStyle.Render(sb.String()))
+	p.cycle.CycleFailed(storyKey, failedStep, duration)
 }
 
 // QueueHeader prints the header for a queue run.
 func (p *DefaultPrinter) QueueHeader(count int, stories []string) {
-	p.writeln("")
-	storiesList := truncateString(strings.Join(stories, ", "), 50)
-	content := fmt.Sprintf("BMAD Queue: %d stories\nStories: %s", count, storiesList)
-	p.writeln(headerStyle.Render(content))
-	p.writeln("")
+	p.cycle.QueueHeader(count, stories)
 }
 
 // QueueStoryStart prints the header for starting a story in a queue.
 func (p *DefaultPrinter) QueueStoryStart(index, total int, storyKey string) {
-	header := fmt.Sprintf("QUEUE [%d/%d]: %s", index, total, storyKey)
-	p.writeln(queueHeaderStyle.Render(header))
+	p.cycle.QueueStoryStart(index, total, storyKey)
 }
 
-// QueueSummary prints the summary after a queue completes or fails.
-func (p *DefaultPrinter) QueueSummary(results []StoryResult, allKeys []string, totalDuration time.Duration) {
-	completed := 0
-	failed := 0
-	skipped := 0
-	for _, r := range results {
-		if r.Skipped {
-			skipped++
-		} else if r.Success {
-			completed++
-		} else {
-			failed++
+// QueueSummary prints the summary after a queue completes.
+func (p *DefaultPrinter) QueueSummary(results []core.StoryResult, allKeys []string, totalDuration time.Duration) {
+	// Convert core.StoryResult to render.StoryResult
+	renderResults := make([]render.StoryResult, len(results))
+	for i, r := range results {
+		renderResults[i] = render.StoryResult{
+			Key:      r.Key,
+			Success:  r.Success,
+			Duration: r.Duration,
+			FailedAt: r.FailedAt,
+			Skipped:  r.Skipped,
 		}
 	}
-	remaining := len(allKeys) - len(results)
-
-	var sb strings.Builder
-
-	if failed == 0 && remaining == 0 {
-		sb.WriteString(successStyle.Render(iconSuccess+" QUEUE COMPLETE") + "\n")
-	} else {
-		sb.WriteString(errorStyle.Render(iconError+" QUEUE STOPPED") + "\n")
-	}
-
-	sb.WriteString(strings.Repeat("─", 50) + "\n")
-	sb.WriteString(fmt.Sprintf("Completed: %d | Skipped: %d | Failed: %d | Remaining: %d\n", completed, skipped, failed, remaining))
-	sb.WriteString(strings.Repeat("─", 50) + "\n")
-
-	for _, r := range results {
-		var status string
-		var suffix string
-		if r.Skipped {
-			status = mutedStyle.Render("↷")
-			suffix = "(done)"
-		} else if r.Success {
-			status = successStyle.Render(iconSuccess)
-			suffix = ""
-		} else {
-			status = errorStyle.Render(iconError)
-			suffix = ""
-		}
-		if suffix != "" {
-			sb.WriteString(fmt.Sprintf("%s %-30s %s\n", status, r.Key, suffix))
-		} else {
-			sb.WriteString(fmt.Sprintf("%s %-30s %s\n", status, r.Key, r.Duration.Round(time.Second)))
-		}
-	}
-
-	if remaining > 0 {
-		for i := len(results); i < len(allKeys); i++ {
-			sb.WriteString(fmt.Sprintf("%s %-30s (pending)\n", mutedStyle.Render(iconPending), allKeys[i]))
-		}
-	}
-
-	sb.WriteString(strings.Repeat("─", 50) + "\n")
-	sb.WriteString(fmt.Sprintf("Total: %s", totalDuration.Round(time.Second)))
-
-	p.writeln(summaryStyle.Render(sb.String()))
+	p.cycle.QueueSummary(renderResults, allKeys, totalDuration)
 }
 
-// CommandHeader prints the header before running a command.
+// CommandHeader prints a nice box with command information.
 func (p *DefaultPrinter) CommandHeader(label, prompt string, truncateLength int) {
-	p.Divider()
-	p.writeln("  Command: %s", labelStyle.Render(label))
-	p.writeln("  Prompt:  %s", truncateString(prompt, truncateLength))
-	p.Divider()
-	p.writeln("")
+	p.session.CommandHeader(label, prompt, truncateLength)
 }
 
 // CommandFooter prints the footer after a command completes.
 func (p *DefaultPrinter) CommandFooter(duration time.Duration, success bool, exitCode int) {
-	p.writeln("")
-	p.Divider()
-	if success {
-		p.writeln("  %s | Duration: %s", successStyle.Render(iconSuccess+" SUCCESS"), duration.Round(time.Millisecond))
-	} else {
-		p.writeln("  %s | Duration: %s | Exit code: %d", errorStyle.Render(iconError+" FAILED"), duration.Round(time.Millisecond), exitCode)
-	}
-	p.Divider()
+	p.session.CommandFooter(duration, success, exitCode)
 }
 
-// truncateString truncates a string to maxLen, adding "..." if truncated.
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen-3] + "..."
+// defaultStyleProvider implements render.StyleProvider using lipgloss styles.
+type defaultStyleProvider struct{}
+
+func newDefaultStyleProvider() *defaultStyleProvider {
+	return &defaultStyleProvider{}
 }
 
-// truncateOutput truncates output to maxLines, showing first and last portions.
-func truncateOutput(output string, maxLines int) string {
-	if maxLines <= 0 {
-		return output
+func (p *defaultStyleProvider) RenderHeader(s string) string {
+	return headerStyle.Render(s)
+}
+
+func (p *defaultStyleProvider) RenderSuccess(s string) string {
+	return successStyle.Render(s)
+}
+
+func (p *defaultStyleProvider) RenderError(s string) string {
+	return errorStyle.Render(s)
+}
+
+func (p *defaultStyleProvider) RenderMuted(s string) string {
+	return mutedStyle.Render(s)
+}
+
+func (p *defaultStyleProvider) RenderDivider(s string) string {
+	return dividerStyle.Render(s)
+}
+
+func (p *defaultStyleProvider) RenderBullet(s string) string {
+	return bulletStyle.Render(s)
+}
+
+func (p *defaultStyleProvider) RenderToolName(s string) string {
+	return toolNameStyle.Render(s)
+}
+
+func (p *defaultStyleProvider) RenderToolParams(s string) string {
+	return toolParamsStyle.Render(s)
+}
+
+func (p *defaultStyleProvider) RenderToolOutput(s string) string {
+	return toolOutputStyle.Render(s)
+}
+
+func (p *defaultStyleProvider) RenderQuestionHeader(s string) string {
+	return questionHeaderStyle.Render(s)
+}
+
+func (p *defaultStyleProvider) RenderDiffSummary(s string) string {
+	return diffSummaryStyle.Render(s)
+}
+
+func (p *defaultStyleProvider) RenderText(s string) string {
+	return textStyle.Render(s)
+}
+
+// defaultWidthProvider implements width providers.
+type defaultWidthProvider struct{}
+
+func newDefaultWidthProvider() *defaultWidthProvider {
+	return &defaultWidthProvider{}
+}
+
+func (p *defaultWidthProvider) TerminalWidth() int {
+	return TerminalWidth()
+}
+
+// toolDiffAdapter implements render.DiffRenderer for tool output.
+type toolDiffAdapter struct {
+	renderer *diff.Renderer
+}
+
+func newToolDiffAdapter() *toolDiffAdapter {
+	return &toolDiffAdapter{
+		renderer: diff.NewRenderer(
+			diff.WithLineNumbers(false),
+			diff.WithGutter(true),
+			diff.WithHighlighter(HighlightCode),
+		),
+	}
+}
+
+func (a *toolDiffAdapter) RenderDiff(filePath, oldStr, newStr string) string {
+	d := createEditDiff(oldStr, newStr)
+	lang := DetectLanguage(filePath)
+	a.renderer = diff.NewRenderer(
+		diff.WithLineNumbers(false),
+		diff.WithGutter(true),
+		diff.WithSyntaxHighlight(lang),
+		diff.WithHighlighter(HighlightCode),
+	)
+	return a.renderer.RenderWithSummary(d)
+}
+
+func (a *toolDiffAdapter) RenderWriteDiff(filePath, content string) string {
+	d := createWriteDiff(content)
+	lang := DetectLanguage(filePath)
+	a.renderer = diff.NewRenderer(
+		diff.WithLineNumbers(true),
+		diff.WithGutter(true),
+		diff.WithSyntaxHighlight(lang),
+		diff.WithHighlighter(HighlightCode),
+	)
+	return a.renderer.RenderWithSummary(d)
+}
+
+func (a *toolDiffAdapter) RenderNotebookEdit(params core.ToolParams) string {
+	// Create info line
+	info := ""
+	if params.EditMode != "" {
+		info += "mode: " + params.EditMode
+	}
+	if params.CellType != "" {
+		if info != "" {
+			info += ", "
+		}
+		info += "type: " + params.CellType
+	}
+	var result string
+	if info != "" {
+		result = toolOutputStyle.Render(iconOutput) + " " + toolOutputStyle.Render(info) + "\n"
 	}
 
-	lines := strings.Split(output, "\n")
-	if len(lines) <= maxLines {
-		return output
+	// Create diff for the new source
+	d := createWriteDiff(params.NewSource)
+	lang := "python"
+	if params.CellType == "markdown" {
+		lang = "markdown"
 	}
 
-	half := maxLines / 2
-	omitted := len(lines) - maxLines
+	a.renderer = diff.NewRenderer(
+		diff.WithLineNumbers(true),
+		diff.WithGutter(true),
+		diff.WithSyntaxHighlight(lang),
+		diff.WithHighlighter(HighlightCode),
+	)
 
-	first := strings.Join(lines[:half], "\n")
-	last := strings.Join(lines[len(lines)-half:], "\n")
+	return result + a.renderer.Render(d)
+}
 
-	return fmt.Sprintf("%s\n  ... (%d lines omitted) ...\n%s", first, omitted, last)
+func (a *toolDiffAdapter) RenderUnifiedDiff(output string) string {
+	d, err := diff.ParseUnifiedDiff(output)
+	if err != nil || len(d.Hunks) == 0 {
+		// Fall back to basic formatting
+		return FormatDiff(output)
+	}
+
+	// Detect language from file path
+	lang := ""
+	if d.NewFile != "" {
+		lang = DetectLanguage(d.NewFile)
+	}
+
+	a.renderer = diff.NewRenderer(
+		diff.WithLineNumbers(true),
+		diff.WithGutter(true),
+		diff.WithSyntaxHighlight(lang),
+		diff.WithHighlighter(HighlightCode),
+	)
+
+	return a.renderer.RenderWithSummary(d)
+}
+
+func (a *toolDiffAdapter) IsUnifiedDiff(output string) bool {
+	return diff.IsUnifiedDiff(output)
+}
+
+func (a *toolDiffAdapter) FormatDiff(output string) string {
+	return FormatDiff(output)
+}
+
+// outputWriterAdapter allows the DefaultPrinter to be used as an OutputWriter for CycleRenderer.
+type outputWriterAdapter struct {
+	printer *DefaultPrinter
+}
+
+func (a *outputWriterAdapter) Writeln(format string, args ...interface{}) {
+	fmt.Fprintf(a.printer.out, format+"\n", args...)
+}
+
+func (a *outputWriterAdapter) Divider() {
+	a.printer.Divider()
+}
+
+// createEditDiff creates a Diff from old/new strings for Edit tool display.
+func createEditDiff(oldStr, newStr string) *diff.Diff {
+	d := &diff.Diff{}
+
+	var lines []diff.Line
+
+	// Add deleted lines (from old_string)
+	if oldStr != "" {
+		oldLines := splitLines(oldStr)
+		for i, line := range oldLines {
+			lines = append(lines, diff.Line{
+				Type:       diff.LineTypeDeleted,
+				Content:    line,
+				OldLineNum: i + 1,
+			})
+			d.Deleted++
+		}
+	}
+
+	// Add added lines (from new_string)
+	if newStr != "" {
+		newLines := splitLines(newStr)
+		for i, line := range newLines {
+			lines = append(lines, diff.Line{
+				Type:       diff.LineTypeAdded,
+				Content:    line,
+				NewLineNum: i + 1,
+			})
+			d.Added++
+		}
+	}
+
+	if len(lines) > 0 {
+		d.Hunks = []diff.Hunk{{Lines: lines}}
+	}
+
+	return d
+}
+
+// createWriteDiff creates an all-additions Diff from content for Write tool display.
+func createWriteDiff(content string) *diff.Diff {
+	d := &diff.Diff{}
+
+	var lines []diff.Line
+	contentLines := splitLines(content)
+	for i, line := range contentLines {
+		lines = append(lines, diff.Line{
+			Type:       diff.LineTypeAdded,
+			Content:    line,
+			NewLineNum: i + 1,
+		})
+		d.Added++
+	}
+
+	if len(lines) > 0 {
+		d.Hunks = []diff.Hunk{{Lines: lines}}
+	}
+
+	return d
+}
+
+// splitLines splits a string into lines, preserving the final empty line if present.
+func splitLines(s string) []string {
+	if s == "" {
+		return []string{}
+	}
+	lines := make([]string, 0, 1)
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			lines = append(lines, s[start:i])
+			start = i + 1
+		}
+	}
+	// Add the final line if there's remaining content or if the string ends with newline
+	if start < len(s) || (len(s) > 0 && s[len(s)-1] == '\n') {
+		lines = append(lines, s[start:])
+	}
+	return lines
 }

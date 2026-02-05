@@ -35,6 +35,10 @@ func (m *MockWorkflowRunner) RunRaw(ctx context.Context, prompt string) int {
 	return 0
 }
 
+func (m *MockWorkflowRunner) SetOperation(operation string) {
+	// No-op for mock
+}
+
 // MockStatusWriter is a mock for testing.
 type MockStatusWriter struct {
 	// Updates records all status updates.
