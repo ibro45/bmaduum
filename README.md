@@ -7,6 +7,8 @@ A CLI tool for automating [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-ME
 
 **bmaduum** orchestrates Claude AI to automate development workflows—creating stories, implementing features, reviewing code, and managing git operations based on your project's sprint status.
 
+> **Warning:** This tool runs Claude CLI with `--dangerously-skip-permissions`, meaning Claude can read, write, and execute commands **without asking for confirmation**. Only use this in trusted repositories and isolated environments. See [Security Warning](#security-warning) for details.
+
 ## Table of Contents
 
 - [Quick Start](#quick-start)
