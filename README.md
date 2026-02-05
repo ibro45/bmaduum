@@ -50,11 +50,9 @@ bmaduum epic all
 
 ### Prerequisites
 
-- Go 1.25 or later
 - [Claude CLI](https://github.com/anthropics/claude-code) installed and configured
-- [just](https://github.com/casey/just) (optional, for running tasks)
 
-### From Source
+### From Source (requires Go 1.25+)
 
 ```bash
 git clone https://github.com/ibro45/bmaduum.git
@@ -62,63 +60,16 @@ cd bmaduum
 go install ./cmd/bmaduum
 ```
 
-Or using just:
-
-```bash
-just install
-```
-
-### Build Only
-
-```bash
-just build
-# Binary will be created as ./bmaduum
-```
-
-### Release Builds
-
-Release builds with version information are available via GoReleaser:
-
-```bash
-just release-snapshot  # Local snapshot build
-just release           # Full release (requires git tag)
-```
+> **Note:** This installs to `$GOPATH/bin` (usually `~/go/bin`). Make sure it's in your PATH:
+> ```bash
+> # Add to ~/.zshrc or ~/.bashrc
+> export PATH="$HOME/go/bin:$PATH"
+> ```
 
 ## Uninstallation
 
-### Installed via `go install`
-
-Remove the binary from your Go bin directory:
-
 ```bash
-# Default location
-rm "$(go env GOPATH)/bin/bmaduum"
-
-# Or if using $HOME/go
-rm "$HOME/go/bin/bmaduum"
-
-# Or find where it is
-which bmaduum  # Then remove that path
-```
-
-### Installed from prebuilt binary
-
-Remove the binary from wherever you installed it:
-
-```bash
-# If installed to /usr/local/bin
-sudo rm /usr/local/bin/bmaduum
-
-# If installed to ~/.local/bin
-rm ~/.local/bin/bmaduum
-```
-
-### Docker
-
-Remove the Docker image:
-
-```bash
-docker rmi ghcr.io/ibro45/bmaduum:latest
+rm "$(which bmaduum)"
 ```
 
 ## Usage
